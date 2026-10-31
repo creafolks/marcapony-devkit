@@ -94,7 +94,9 @@ export function App() {
         `/api/reservations/${encodeURIComponent(reservation.id)}/status`,
         { body: { status, rejectionReason } },
       )
-      setMessage(body.simulated ? 'Change simulated (preview). Nothing was saved.' : null)
+      setMessage(
+        body.simulated ? 'Change simulated (test mode or preview). Nothing was saved.' : null,
+      )
       load(date)
     } catch (err) {
       setError(errorMessage(err))

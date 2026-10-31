@@ -28,6 +28,7 @@ interface CheckoutResult {
   currency: string
   payUrl: string | null
   linkId: string
+  simulated: boolean
 }
 
 /** productId → quantity. Only ids and quantities: the server prices the cart. */
@@ -195,7 +196,11 @@ export function App() {
         <section>
           <h2>Ready to pay</h2>
           <p>Total: {money(result.amount, result.currency)}</p>
-          {result.payUrl ? (
+          {result.simulated ? (
+            <p className="notice">
+              Test mode: the payment link was simulated, so there is nothing to pay yet.
+            </p>
+          ) : result.payUrl ? (
             <p>
               <a href={result.payUrl}>Pay now</a>
             </p>

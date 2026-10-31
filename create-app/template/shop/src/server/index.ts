@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
 import type { PaymentLink, PaymentLinkLineItem, Product } from 'marcapony-sdk'
-import { errorResponse, marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
+import { errorResponse, isSimulated, marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
 
 /**
  * A small public shop: the catalog, a cart kept in the browser, and a checkout
@@ -192,7 +192,18 @@ app.post('/api/checkout', async (c) => {
   // The SDK returns the link's short id; the buyer pays it at /pay/{linkId} on
   // the business's site.
   const payUrl = site.domain ? `https://${site.domain}/pay/${encodeURIComponent(link.linkId)}` : null
-  return c.json({ amount, currency: link.currency ?? currency, payUrl, linkId: link.linkId }, 201)
+  // In test mode the link is only simulated: there is nothing to pay yet.
+  const simulated = isSimulated(link)
+  return c.json(
+    {
+      amount,
+      currency: link.currency ?? currency,
+      payUrl: simulated ? null : payUrl,
+      linkId: link.linkId,
+      simulated,
+    },
+    201,
+  )
 })
 
 app.onError((err) => errorResponse(err))

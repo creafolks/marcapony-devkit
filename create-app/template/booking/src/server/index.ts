@@ -3,6 +3,7 @@ import type { Identity } from 'marcapony-sdk'
 import {
   errorResponse,
   identityOf,
+  isSimulated,
   marcaponyFromEnv,
   type Marcapony,
   type MarcaponyBindings,
@@ -95,7 +96,8 @@ app.post('/api/reservations', async (c) => {
     },
     { idempotencyKey: `booking-${who.sub}-${requestId}` },
   )
-  return c.json({ reservation, simulated: who.preview }, 201)
+  // Simulated in a preview, and in test mode for every visitor.
+  return c.json({ reservation, simulated: who.preview || isSimulated(reservation) }, 201)
 })
 
 app.post('/api/reservations/:id/cancel', async (c) => {
@@ -103,7 +105,7 @@ app.post('/api/reservations/:id/cancel', async (c) => {
   const who = await customerOf(mp, c.env, c.req.raw)
   if (who instanceof Response) return who
   const result = await mp.forRequest(c.req.raw).me.reservations.cancel(c.req.param('id'))
-  return c.json({ reservation: result, simulated: who.preview })
+  return c.json({ reservation: result, simulated: who.preview || isSimulated(result) })
 })
 
 app.onError((err) => errorResponse(err))

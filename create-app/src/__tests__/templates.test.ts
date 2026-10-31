@@ -285,3 +285,15 @@ describe('the shop checkout', () => {
     expect(readme).toContain('guardCheckout')
   })
 })
+
+// New apps start in test mode, where every write is simulated even outside a
+// preview. A template must not report such a write as saved.
+describe('simulated writes', () => {
+  const server = (name: string) => readFileSync(join(ROOT, name, 'src/server/index.ts'), 'utf8')
+
+  it('are reported from test mode as well as from a preview', () => {
+    expect(server('booking').match(/who\.preview \|\| isSimulated\(/g)?.length).toBe(2)
+    expect(server('team-tool')).toContain('who.preview || isSimulated(result)')
+    expect(server('shop')).toContain('isSimulated(link)')
+  })
+})

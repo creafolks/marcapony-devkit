@@ -25,6 +25,7 @@ export function App() {
   const [signedOut, setSignedOut] = useState(false)
   const [reservations, setReservations] = useState<Reservation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const loadReservations = useCallback(() => {
     api<{ reservations: Reservation[] }>('/api/reservations')
@@ -65,7 +66,13 @@ export function App() {
   async function cancel(id: string) {
     setError(null)
     try {
-      await api(`/api/reservations/${encodeURIComponent(id)}/cancel`, { method: 'POST' })
+      const body = await api<{ simulated: boolean }>(
+        `/api/reservations/${encodeURIComponent(id)}/cancel`,
+        { method: 'POST' },
+      )
+      setNotice(
+        body.simulated ? 'Cancellation simulated (test mode or preview). Nothing was saved.' : null,
+      )
       loadReservations()
     } catch (err) {
       setError(errorMessage(err))
@@ -83,6 +90,7 @@ export function App() {
         </p>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
+      {notice ? <p>{notice}</p> : null}
 
       <h2>My appointments</h2>
       {!me.canView ? <p>You do not have access to your appointment list.</p> : null}
@@ -134,7 +142,11 @@ function BookingForm({ onBooked }: { onBooked: () => void }) {
       const body = await api<{ simulated: boolean }>('/api/reservations', {
         body: { requestId, date, time, notes },
       })
-      setMessage(body.simulated ? 'Booking simulated (preview).' : 'Booked. We will confirm it.')
+      setMessage(
+        body.simulated
+          ? 'Booking simulated (test mode or preview). Nothing was saved.'
+          : 'Booked. We will confirm it.',
+      )
       setRequestId(newRequestId())
       setNotes('')
       onBooked()
