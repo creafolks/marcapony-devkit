@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
+import { errorResponse, marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
 
 /**
  * The app's server. Only `/api/*` reaches this worker — everything else is
@@ -14,10 +14,15 @@ app.get('/api/health', (c) => c.json({ ok: true }))
  * Example read. The app key never leaves the server: the browser calls this
  * route, and this route calls Marcapony.
  */
+/** `Product.status`: 1 draft, 2 published, 3 archived. Show visitors only published products. */
+const PUBLISHED = 2
+
 app.get('/api/products', async (c) => {
   const mp = marcaponyFromEnv(c.env)
-  const page = await mp.products.list({ perPage: 12 })
-  return c.json({ products: page.data, total: page.meta.total })
+  // The list has no status filter, so drop drafts and archived products here.
+  const page = await mp.products.list({ perPage: 50 })
+  const products = page.data.filter((product) => product.status === PUBLISHED).slice(0, 12)
+  return c.json({ products })
 })
 
 /**
@@ -33,9 +38,6 @@ app.get('/api/products', async (c) => {
  * })
  */
 
-app.onError((err, c) => {
-  console.error(err)
-  return c.json({ error: err instanceof Error ? err.message : 'Unexpected error' }, 500)
-})
+app.onError((err) => errorResponse(err))
 
 export default app

@@ -4,7 +4,7 @@
  *
  * Caveat worth knowing: this runs under Bun, not the Workers runtime. The two
  * are close but not identical, so a deployed app can still surface something
- * local dev did not. Verify after `bunx marcapony app deploy`, and prefer plain
+ * local dev did not. Verify after `bun run deploy`, and prefer plain
  * web APIs (fetch, Request, Response, crypto) over Node built-ins in
  * `src/server` — those are the ones that behave the same in both.
  */
@@ -27,10 +27,27 @@ function loadDevVars(): Record<string, string> {
   return out
 }
 
+function readPlacement(): string | undefined {
+  try {
+    const config = JSON.parse(readFileSync('marcapony.json', 'utf8')) as { placement?: string }
+    return config.placement
+  } catch {
+    return undefined
+  }
+}
+
 const env = loadDevVars()
 if (!env.MARCAPONY_API_KEY) {
   console.warn(
-    `No MARCAPONY_API_KEY in ${ENV_FILE} — /api routes that call Marcapony will fail.\nRun \`bunx marcapony app link\` to get one.`,
+    `No MARCAPONY_API_KEY in ${ENV_FILE} — /api routes that call Marcapony will fail.\nRun \`bun run link\` to get one.`,
+  )
+}
+
+// A portal app only learns who is signed in from a header the platform adds,
+// using the app id it sets at deploy. Neither exists here.
+if (!env.MARCAPONY_APP_ID && readPlacement() === 'portal') {
+  console.info(
+    'Local dev has no app id and no signed-in visitor, so identity is null and signed-in routes answer 401.\nTry those flows on the deployed app (`bun run deploy`), opened from the portal or the dashboard.',
   )
 }
 
