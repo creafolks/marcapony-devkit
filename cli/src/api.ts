@@ -23,6 +23,7 @@ export interface DeploymentRequest {
   assets?: Array<{ path: string; content: string; contentType: string }>
   assetsConfig?: Record<string, unknown>
   placement?: 'portal' | 'public'
+  dataAccess?: 'account' | 'visitor' | 'customer' | 'team'
   permissions?: Array<{ id: string; label: string; grants: string[] }>
   portal?: { title?: string; icon?: string; sortOrder?: number }
   assetsBinding?: string

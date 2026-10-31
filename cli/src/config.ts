@@ -26,10 +26,22 @@ export interface MarcaponyConfig {
    */
   placement?: 'portal' | 'public'
   /**
+   * Whose data the app works with. On the site: `account` (every customer's
+   * records, for integrations and back-office tools) or `visitor` (catalog,
+   * bookings and form entries only). In the portal: `customer` (signed-in
+   * customers, `me.*`) or `team` (team members). A deploy can only narrow it,
+   * or pick `customer` / `team` when it moves the app into the portal; widening
+   * is done in the dashboard. Omitted leaves the stored value alone.
+   */
+  dataAccess?: 'account' | 'visitor' | 'customer' | 'team'
+  /**
    * The permissions the app offers; the owner picks who gets which in the
-   * dashboard. `grants` names platform permissions (`reservations.own.read`,
-   * `reservations.own.create`, `reservations.own.cancel`, `orders.own.read`) or
-   * is empty for a permission only the app interprets.
+   * dashboard. `grants` names platform permissions (customer apps:
+   * `reservations.own.read`, `reservations.own.create`, `reservations.own.cancel`,
+   * `orders.own.read`, `profile.own.read`, `payment-links.own.read`,
+   * `forms.own.read`; team tools: `reservations.read`, `reservations.write`,
+   * `orders.read`, `customers.read`) or is empty for a permission only the app
+   * interprets.
    */
   permissions?: Array<{ id: string; label: string; grants?: string[] }>
   /**

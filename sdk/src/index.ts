@@ -29,10 +29,16 @@ import type {
   FormSubmission,
   HighlightedProduct,
   ImportAssetInput,
+  ListOwnReservationsParams,
+  MeProfile,
   Order,
   OrderWithItems,
+  OwnFormSubmission,
+  OwnPaymentLink,
+  OwnReservation,
   Page,
   PaymentLink,
+  PaymentLinkStatus,
   Post,
   PostKind,
   Product,
@@ -270,16 +276,27 @@ function pathId(id: string): string {
 
 function meClient(t: Transport): MeClient {
   return {
+    profile: {
+      get: () =>
+        t.request<{ data: MeProfile }>({ method: 'GET', path: '/me/profile' }).then(unwrap),
+    },
     reservations: {
-      list: (params?: ListParams) =>
-        t.request<Page<Reservation>>({ method: 'GET', path: '/me/reservations', query: params }),
+      list: (params?: ListOwnReservationsParams) =>
+        t.request<Page<OwnReservation>>({
+          method: 'GET',
+          path: '/me/reservations',
+          query: params,
+        }),
       get: (id: string) =>
         t
-          .request<{ data: Reservation }>({ method: 'GET', path: `/me/reservations/${pathId(id)}` })
+          .request<{ data: OwnReservation }>({
+            method: 'GET',
+            path: `/me/reservations/${pathId(id)}`,
+          })
           .then(unwrap),
       create: (input: CreateOwnReservationInput, options?: RequestOptions) =>
         t
-          .request<{ data: Reservation }>({
+          .request<{ data: OwnReservation }>({
             method: 'POST',
             path: '/me/reservations',
             body: input,
@@ -303,6 +320,46 @@ function meClient(t: Transport): MeClient {
           .request<{ data: OrderWithItems }>({ method: 'GET', path: `/me/orders/${pathId(id)}` })
           .then(unwrap),
     },
+    paymentLinks: {
+      list: (params?: ListParams & { status?: PaymentLinkStatus }) =>
+        t.request<Page<OwnPaymentLink>>({
+          method: 'GET',
+          path: '/me/payment-links',
+          query: params,
+        }),
+      get: (id: string) =>
+        t
+          .request<{ data: OwnPaymentLink }>({
+            method: 'GET',
+            path: `/me/payment-links/${pathId(id)}`,
+          })
+          .then(unwrap),
+    },
+    formSubmissions: {
+      list: (params?: ListParams) =>
+        t.request<Page<OwnFormSubmission>>({
+          method: 'GET',
+          path: '/me/form-submissions',
+          query: params,
+        }),
+    },
+  }
+}
+
+/**
+ * The `kind` claim of an identity token, read WITHOUT verifying it: a hint for
+ * which half of the scoped client applies. The platform verifies every call and
+ * refuses the wrong kind, so a forged value only gets the caller 401s.
+ */
+function unverifiedKind(token: string): 'customer' | 'member' | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'))
+    const kind = (JSON.parse(json) as { kind?: unknown }).kind
+    return kind === 'customer' || kind === 'member' ? kind : null
+  } catch {
+    return null
   }
 }
 
@@ -388,7 +445,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         )
       }
       const scoped = new Transport(options, { [IDENTITY_HEADER]: token })
-      return { me: meClient(scoped), ...memberClient(scoped) }
+      return { kind: unverifiedKind(token), me: meClient(scoped), ...memberClient(scoped) }
     },
     site: {
       get: () => t.request<{ data: SiteInfo }>({ method: 'GET', path: '/site' }).then(unwrap),
@@ -677,17 +734,32 @@ export interface CreateOwnReservationInput {
   customFields?: { key: string; label: string; value: string }[]
 }
 
-/** The calls a signed-in visitor may make about themselves; the platform forces the customer. */
+/**
+ * The calls a signed-in customer may make about themselves. The platform takes
+ * the customer from the verified identity on every call; nothing here can name
+ * another customer, and another customer's id answers 404.
+ */
 export type MeClient = {
+  profile: {
+    get: () => Promise<MeProfile>
+  }
   reservations: {
-    list: (params?: ListParams) => Promise<Page<Reservation>>
-    get: (id: string) => Promise<Reservation>
-    create: (input: CreateOwnReservationInput, options?: RequestOptions) => Promise<Reservation>
+    list: (params?: ListOwnReservationsParams) => Promise<Page<OwnReservation>>
+    get: (id: string) => Promise<OwnReservation>
+    create: (input: CreateOwnReservationInput, options?: RequestOptions) => Promise<OwnReservation>
     cancel: (id: string) => Promise<{ id: string; status: 'cancelled' }>
   }
   orders: {
     list: (params?: ListParams) => Promise<Page<Order>>
     get: (id: string) => Promise<OrderWithItems>
+  }
+  paymentLinks: {
+    list: (params?: ListParams & { status?: PaymentLinkStatus }) => Promise<Page<OwnPaymentLink>>
+    get: (id: string) => Promise<OwnPaymentLink>
+  }
+  /** Metadata only: entries are linked by the e-mail typed into the form, so the answers are never returned. */
+  formSubmissions: {
+    list: (params?: ListParams) => Promise<Page<OwnFormSubmission>>
   }
 }
 
@@ -712,8 +784,18 @@ export type MemberClient = {
 /**
  * A client acting as the signed-in person of one request. A customer (portal
  * visitor) uses `me`; a team member (member tool) uses the account groups.
+ * Which one applies is fixed by the app: a customer-facing app only ever gets
+ * customer identities and a team tool only member identities.
+ *
+ * Create it per request and never keep it, or anything it returned, in module
+ * scope: a worker isolate serves many people, and a cached answer would be
+ * shown to the next one.
  */
-export type ScopedClient = { me: MeClient } & MemberClient
+export type ScopedClient = {
+  /** The identity's kind, read from the token without verifying it (the platform verifies every call). */
+  kind: 'customer' | 'member' | null
+  me: MeClient
+} & MemberClient
 
 export type MarcaponyClient = {
   /** Who is signed in on this request, or null. For display; the platform enforces access. */
