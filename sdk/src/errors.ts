@@ -49,12 +49,7 @@ export class ServerError extends MarcaponyError {}
 
 const ERROR_BY_CODE: Record<
   string,
-  new (
-    status: number,
-    code: string,
-    message: string,
-    fields: ApiFieldError[],
-  ) => MarcaponyError
+  new (status: number, code: string, message: string, fields: ApiFieldError[]) => MarcaponyError
 > = {
   unauthorized: UnauthorizedError,
   insufficient_scope: InsufficientScopeError,

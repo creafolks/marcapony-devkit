@@ -11,16 +11,14 @@ const ASSETS_IGNORE_FILE = '.assetsignore'
 const ALWAYS_IGNORED = [ASSETS_IGNORE_FILE, '.dev.vars', 'wrangler.json', 'wrangler.jsonc']
 
 export function parseAssetsIgnore(content: string): string[] {
-  return (
-    content
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith('#'))
-      // Strip a leading "./" or "/" only — a bare leading dot is part of the
-      // name (".dev.vars"), not a path prefix.
-      .map((line) => line.replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, ''))
-      .filter((line) => line.length > 0)
-  )
+  return content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'))
+    // Strip a leading "./" or "/" only — a bare leading dot is part of the
+    // name (".dev.vars"), not a path prefix.
+    .map((line) => line.replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, ''))
+    .filter((line) => line.length > 0)
 }
 
 /** Exact file match or anything under a listed directory. */
@@ -82,7 +80,9 @@ export function contentTypeFor(filePath: string): string {
 export function collectAssets(root: string): CollectedAsset[] {
   const out: CollectedAsset[] = []
   const ignorePath = join(root, ASSETS_IGNORE_FILE)
-  const patterns = existsSync(ignorePath) ? parseAssetsIgnore(readFileSync(ignorePath, 'utf8')) : []
+  const patterns = existsSync(ignorePath)
+    ? parseAssetsIgnore(readFileSync(ignorePath, 'utf8'))
+    : []
 
   const walk = (dir: string, prefix: string): void => {
     for (const entry of readdirSync(dir)) {
