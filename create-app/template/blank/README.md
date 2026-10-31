@@ -17,7 +17,7 @@ Create the app under **My Apps** with:
 | Route               | What it does                       |
 | ------------------- | ---------------------------------- |
 | `GET /api/health`   | Answers `{ "ok": true }`           |
-| `GET /api/products` | The first 12 products of the account |
+| `GET /api/products` | Up to 12 published products of the account |
 
 ## What to change first
 

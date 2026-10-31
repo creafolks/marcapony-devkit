@@ -15,6 +15,8 @@ const app = new Hono<{ Bindings: MarcaponyBindings }>()
 const MAX_LINES = 20
 const MAX_QUANTITY = 99
 const ATTEMPT_ID = /^[A-Za-z0-9-]{8,64}$/
+/** `Product.status`: 1 draft, 2 published, 3 archived. Only published products are for sale. */
+const PUBLISHED = 2
 
 /** What the browser sees of a product: enough to show it, nothing to trust. */
 interface ShopProduct {
@@ -33,6 +35,7 @@ function unitPrice(product: Product): number | null {
 }
 
 function toShopProduct(product: Product, fallbackCurrency: string): ShopProduct | null {
+  if (product.status !== PUBLISHED) return null
   const price = unitPrice(product)
   if (price === null) return null
   return {
@@ -116,6 +119,9 @@ app.post('/api/checkout', async (c) => {
   let totalCents = 0
   for (const product of products) {
     const quantity = quantities.get(product.id) ?? 0
+    if (product.status !== PUBLISHED) {
+      return c.json({ error: `${product.name} is not for sale.` }, 422)
+    }
     const price = unitPrice(product)
     if (price === null) return c.json({ error: `${product.name} cannot be bought online.` }, 422)
     if (quantity > MAX_QUANTITY) {

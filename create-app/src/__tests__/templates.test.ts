@@ -249,3 +249,22 @@ describe('run with a template', () => {
     expect(existsSync(join(target, 'src/ui/main.tsx'))).toBe(true)
   })
 })
+
+// `Product.status` is 1 draft, 2 published, 3 archived. A visitor must never
+// see, or be able to buy, a product the business has not published.
+describe('templates that show products', () => {
+  const server = (name: string) => readFileSync(join(ROOT, name, 'src/server/index.ts'), 'utf8')
+
+  it('only show published products', () => {
+    for (const name of ['blank', 'shop']) {
+      expect(server(name)).toContain('const PUBLISHED = 2')
+      expect(server(name)).toMatch(/status [!=]== PUBLISHED/)
+    }
+  })
+
+  it('refuse to check out a product that is not published', () => {
+    const shop = server('shop')
+    const checkout = shop.slice(shop.indexOf("app.post('/api/checkout'"))
+    expect(checkout).toContain('product.status !== PUBLISHED')
+  })
+})
