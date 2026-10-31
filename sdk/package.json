@@ -1,6 +1,6 @@
 {
   "name": "marcapony-sdk",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Official client for the Marcapony external API (/ext/v1)",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -22,7 +22,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20"

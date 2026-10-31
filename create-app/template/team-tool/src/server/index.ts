@@ -3,7 +3,6 @@ import type { Identity, Reservation, UpdateReservationStatusInput } from 'marcap
 import {
   errorResponse,
   identityOf,
-  isSimulated,
   marcaponyFromEnv,
   type Marcapony,
   type MarcaponyBindings,
@@ -108,7 +107,7 @@ app.post('/api/reservations/:id/status', async (c) => {
 
   const result = await mp.forRequest(c.req.raw).reservations.updateStatus(c.req.param('id'), input)
   // Simulated in a preview, and in test mode for every member.
-  return c.json({ ok: true, simulated: who.preview || isSimulated(result) })
+  return c.json({ ok: true, simulated: who.preview || result.simulated === true })
 })
 
 app.onError((err) => errorResponse(err))
