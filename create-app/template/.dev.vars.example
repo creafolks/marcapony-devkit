@@ -1,5 +1,0 @@
-# `bunx marcapony app link` writes the real values into `.dev.vars` for you —
-# the key is minted fresh and never passes through a clipboard. This file is
-# only here to document what ends up there.
-MARCAPONY_API_KEY=mpk_...
-MARCAPONY_API_URL=https://api.marcapony.com/ext/v1
