@@ -104,6 +104,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeploymentView>
       ...(assets ? { assets } : {}),
       ...(config.assetsConfig ? { assetsConfig: config.assetsConfig } : {}),
       ...(config.placement ? { placement: config.placement } : {}),
+      ...(config.dataAccess ? { dataAccess: config.dataAccess } : {}),
       ...(config.permissions
         ? { permissions: config.permissions.map((p) => ({ ...p, grants: p.grants ?? [] })) }
         : {}),

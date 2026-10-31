@@ -127,7 +127,31 @@ describe('forRequest()', () => {
     expect(seen[0]!.url).toBe(`${BASE}/me/reservations`)
     expect(seen[0]!.headers.Authorization).toBe('Bearer mpk_x')
     expect(seen[0]!.headers['x-marcapony-identity']).toBe('the.token.value')
-    expect(Object.keys(scoped)).toEqual(['me', 'reservations', 'orders', 'customers'])
+    expect(Object.keys(scoped)).toEqual(['kind', 'me', 'reservations', 'orders', 'customers'])
+    // Not a JWS payload: no kind can be read.
+    expect(scoped.kind).toBeNull()
+  })
+
+  it('reads the kind from the token as a hint, and reaches the new me calls', async () => {
+    const seen: string[] = []
+    const fetchImpl = (async (url: string | URL | Request) => {
+      seen.push(String(url))
+      return new Response(JSON.stringify({ data: [], meta: { page: 1, perPage: 50, total: 0 } }), {
+        status: 200,
+      })
+    }) as typeof globalThis.fetch
+    const mp = createClient({ apiKey: 'mpk_x', baseUrl: BASE, appId: APP, fetch: fetchImpl })
+    const token = await sign(await keyPair(), claims())
+    const scoped = mp.forRequest(requestWith(token))
+    expect(scoped.kind).toBe('customer')
+    await scoped.me.paymentLinks.list({ status: 'pending' })
+    await scoped.me.formSubmissions.list()
+    await scoped.me.reservations.list({ status: 'approved', from: '2026-11-01' })
+    expect(seen).toEqual([
+      `${BASE}/me/payment-links?status=pending`,
+      `${BASE}/me/form-submissions`,
+      `${BASE}/me/reservations?status=approved&from=2026-11-01`,
+    ])
   })
 
   it('sends the identity on the account routes a member tool may reach', async () => {
