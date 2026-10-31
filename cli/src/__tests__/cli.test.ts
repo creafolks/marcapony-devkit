@@ -685,6 +685,53 @@ describe('source push (spike)', () => {
     ])
   })
 
+  it('sends the pushed commit with the deployment', async () => {
+    scaffold()
+    const { fetch: fetchImpl, calls } = makeFetch([jsonResponse({ data: GRANT }, 201), live()])
+    const commit = 'a'.repeat(40)
+    await runDeploy({
+      cwd: dir,
+      cliEnv: 'local',
+      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      message: '  Add the booking form  ',
+      fetchImpl,
+      runBuild: () => {},
+      log: () => {},
+      pushSourceImpl: async () => commit,
+    })
+    const body = JSON.parse(String(calls[1]?.init.body)) as { source?: Record<string, unknown> }
+    expect(body.source).toMatchObject({ commit, message: 'Add the booking form', fileCount: 4 })
+    expect(body.source?.sizeBytes).toBeGreaterThan(0)
+  })
+
+  it('sends no source when the push fails or is disabled', async () => {
+    scaffold()
+    const failed = makeFetch([jsonResponse({ data: GRANT }, 201), live()])
+    await runDeploy({
+      cwd: dir,
+      cliEnv: 'local',
+      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      fetchImpl: failed.fetch,
+      runBuild: () => {},
+      log: () => {},
+      pushSourceImpl: async () => {
+        throw new Error('rejected')
+      },
+    })
+    expect(JSON.parse(String(failed.calls[1]?.init.body))).not.toHaveProperty('source')
+
+    const disabled = makeFetch([live()])
+    await runDeploy({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: disabled.fetch,
+      runBuild: () => {},
+      log: () => {},
+    })
+    expect(JSON.parse(String(disabled.calls[0]?.init.body))).not.toHaveProperty('source')
+  })
+
   it('never reads credential files, whatever the ignore rules say', () => {
     scaffold()
     for (const name of ['.dev.vars.production', '.npmrc', '.netrc', 'id_ed25519', 'cert.p12']) {

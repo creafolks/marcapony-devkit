@@ -2,7 +2,13 @@ import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { collectAssets } from './assets.js'
-import { createDeployment, fetchDeployment, fetchSourceGrant, type DeploymentView } from './api.js'
+import {
+  createDeployment,
+  fetchDeployment,
+  fetchSourceGrant,
+  type DeploymentSource,
+  type DeploymentView,
+} from './api.js'
 import { readConfig, resolveApiKey, resolveApiRoot } from './config.js'
 import { collectSourceFiles, pushSource, scanForSecrets, type PushSourceOptions } from './source.js'
 
@@ -88,8 +94,9 @@ export async function runDeploy(options: DeployOptions): Promise<DeploymentView>
 
   // An empty list would commit an empty tree on top of the stored source and
   // wipe it (an allowlist .gitignore whose negations we skip ends up here).
+  let source: DeploymentSource | null = null
   if (sourceFiles && sourceFiles.length > 0) {
-    await trySourcePush({ options, apiRoot, apiKey, files: sourceFiles, log })
+    source = await trySourcePush({ options, apiRoot, apiKey, files: sourceFiles, log })
   } else if (sourceFiles) {
     log('Source not saved: no files left after the ignore rules')
   }
@@ -108,6 +115,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeploymentView>
         ? { permissions: config.permissions.map((p) => ({ ...p, grants: p.grants ?? [] })) }
         : {}),
       ...(config.portal ? { portal: config.portal } : {}),
+      ...(source ? { source } : {}),
     },
     options.fetchImpl ?? fetch,
   )
@@ -163,21 +171,41 @@ async function trySourcePush(args: {
   apiKey: string
   files: string[]
   log: (message: string) => void
-}): Promise<void> {
+}): Promise<DeploymentSource | null> {
   const { options, apiRoot, apiKey, files, log } = args
   try {
     const findings = scanForSecrets(options.cwd, files)
     if (findings.length > 0) {
       for (const f of findings) log(`Secret scan: ${f.rule} in ${f.path}:${f.line}`)
       log('Warning: source not saved because the secret scan found possible secrets')
-      return
+      return null
     }
     const grant = await fetchSourceGrant(apiRoot, apiKey, options.fetchImpl ?? fetch)
-    if (!grant) return
+    if (!grant) return null
     const push = options.pushSourceImpl ?? pushSource
-    await push({ cwd: options.cwd, files, grant, message: options.message })
+    const commit = await push({ cwd: options.cwd, files, grant, message: options.message })
     log(`Source saved (${files.length} file(s), branch ${grant.branch})`)
+    const message = options.message?.trim()
+    return {
+      commit,
+      ...(message ? { message: message.slice(0, 500) } : {}),
+      fileCount: files.length,
+      sizeBytes: sourceSize(options.cwd, files),
+    }
   } catch (err) {
     log(`Warning: source not saved (${err instanceof Error ? err.message : String(err)})`)
+    return null
   }
+}
+
+function sourceSize(cwd: string, files: string[]): number {
+  let total = 0
+  for (const file of files) {
+    try {
+      total += statSync(join(cwd, file)).size
+    } catch {
+      // A file removed between collection and now just does not count.
+    }
+  }
+  return total
 }

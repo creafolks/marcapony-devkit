@@ -26,6 +26,15 @@ export interface DeploymentRequest {
   permissions?: Array<{ id: string; label: string; grants: string[] }>
   portal?: { title?: string; icon?: string; sortOrder?: number }
   assetsBinding?: string
+  /** The source commit pushed for this deploy, so the platform can show it as a version. */
+  source?: DeploymentSource
+}
+
+export interface DeploymentSource {
+  commit: string
+  message?: string
+  fileCount?: number
+  sizeBytes?: number
 }
 
 export interface SourceGrant {
