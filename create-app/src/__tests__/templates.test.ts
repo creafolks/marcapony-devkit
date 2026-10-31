@@ -292,8 +292,8 @@ describe('simulated writes', () => {
   const server = (name: string) => readFileSync(join(ROOT, name, 'src/server/index.ts'), 'utf8')
 
   it('are reported from test mode as well as from a preview', () => {
-    expect(server('booking').match(/who\.preview \|\| isSimulated\(/g)?.length).toBe(2)
-    expect(server('team-tool')).toContain('who.preview || isSimulated(result)')
-    expect(server('shop')).toContain('isSimulated(link)')
+    expect(server('booking').match(/who\.preview \|\| \w+\.simulated === true/g)?.length).toBe(2)
+    expect(server('team-tool')).toContain('who.preview || result.simulated === true')
+    expect(server('shop')).toContain('if (link.simulated)')
   })
 })

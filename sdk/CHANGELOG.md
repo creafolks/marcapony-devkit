@@ -14,7 +14,10 @@ minor release may contain breaking changes; each one is listed below.
   `CreatedOrder`, `paymentLinks.create` to `CreatedPaymentLink` (with the
   `paymentUrl` to send the customer) and `formSubmissions.create` to
   `FormSubmissionReceipt`, each wrapped in `WriteResult<T>`. The same applies
-  to the reservation calls of `forRequest()` for team members. Code that cast
+  to the reservation calls of `forRequest()` for team members, and
+  `forRequest().me.reservations.create` and `.cancel` now resolve to
+  `WriteResult<OwnReservation>` and `WriteResult<{ id, status }>`: writes made
+  while the owner previews an app are simulated too. Code that cast
   these results may need its casts removed.
 - `WriteResult<T>` is either the saved record or, in test mode (where every new
   app starts), a `SimulatedWrite<T>`: the input echoed back with an id,

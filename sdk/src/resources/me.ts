@@ -13,6 +13,7 @@ import type {
   Page,
   PaymentLinkStatus,
   RequestOptions,
+  WriteResult,
 } from '../types/index.js'
 
 export function meResource(t: Transport) {
@@ -31,9 +32,9 @@ export function meResource(t: Transport) {
       create: (
         input: CreateOwnReservationInput,
         options?: RequestOptions,
-      ): Promise<OwnReservation> => create(t, path`/me/reservations`, input, options),
+      ): Promise<WriteResult<OwnReservation>> => create(t, path`/me/reservations`, input, options),
       /** Cancels one of the customer's reservations. */
-      cancel: (id: string): Promise<{ id: string; status: 'cancelled' }> =>
+      cancel: (id: string): Promise<WriteResult<{ id: string; status: 'cancelled' }>> =>
         update(t, path`/me/reservations/${id}`, { status: 'cancelled' }),
     },
     orders: {

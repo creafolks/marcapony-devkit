@@ -54,20 +54,6 @@ export async function identityOf(
 }
 
 /**
- * Whether Marcapony only simulated a write. New apps start in test mode, where
- * writes answer with the record they would have created, marked
- * `simulated: true`, and nothing is saved. The SDK types do not declare the
- * marker yet, so read it defensively.
- */
-export function isSimulated(result: unknown): boolean {
-  return (
-    typeof result === 'object' &&
-    result !== null &&
-    (result as { simulated?: unknown }).simulated === true
-  )
-}
-
-/**
  * Turns a failed call into a JSON answer for the browser. A Marcapony error
  * keeps its status (401 not signed in, 403 not allowed, 404, 422 invalid
  * input, 429) so the interface can tell the visitor what happened; anything

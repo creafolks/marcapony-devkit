@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
-import type { PaymentLink, PaymentLinkLineItem, Product } from 'marcapony-sdk'
-import { errorResponse, isSimulated, marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
+import type { PaymentLinkLineItem, Product } from 'marcapony-sdk'
+import { errorResponse, marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
 
 /**
  * A small public shop: the catalog, a cart kept in the browser, and a checkout
@@ -179,7 +179,7 @@ app.post('/api/checkout', async (c) => {
   // are part of the key too: a reused attempt id with a different cart must
   // not be answered with the earlier cart's link.
   const idempotencyKey = `checkout-${attemptId}-${await cartFingerprint(quantities)}`
-  const link = (await mp.paymentLinks.create(
+  const link = await mp.paymentLinks.create(
     {
       title: `${site.name} order`,
       amount,
@@ -187,21 +187,15 @@ app.post('/api/checkout', async (c) => {
       lineItems,
     },
     { idempotencyKey },
-  )) as PaymentLink
+  )
 
-  // The SDK returns the link's short id; the buyer pays it at /pay/{linkId} on
-  // the business's site.
-  const payUrl = site.domain ? `https://${site.domain}/pay/${encodeURIComponent(link.linkId)}` : null
-  // In test mode the link is only simulated: there is nothing to pay yet.
-  const simulated = isSimulated(link)
+  // In test mode the link is only simulated: nothing was saved and there is
+  // nothing to pay yet, so there is no payment page either.
+  if (link.simulated) {
+    return c.json({ amount, currency, payUrl: null, linkId: link.linkId ?? null, simulated: true }, 201)
+  }
   return c.json(
-    {
-      amount,
-      currency: link.currency ?? currency,
-      payUrl: simulated ? null : payUrl,
-      linkId: link.linkId,
-      simulated,
-    },
+    { amount, currency: link.currency, payUrl: link.paymentUrl, linkId: link.linkId, simulated: false },
     201,
   )
 })
