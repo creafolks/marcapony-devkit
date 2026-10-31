@@ -268,3 +268,20 @@ describe('templates that show products', () => {
     expect(checkout).toContain('product.status !== PUBLISHED')
   })
 })
+
+describe('the shop checkout', () => {
+  const shop = readFileSync(join(ROOT, 'shop', 'src/server/index.ts'), 'utf8')
+
+  it('runs guardCheckout before it creates a payment link', () => {
+    const checkout = shop.slice(shop.indexOf("app.post('/api/checkout'"))
+    const guard = checkout.indexOf('guardCheckout(c)')
+    expect(guard).toBeGreaterThan(-1)
+    expect(guard).toBeLessThan(checkout.indexOf('paymentLinks.create'))
+  })
+
+  it('tells the owner to protect checkout before going live', () => {
+    const readme = readFileSync(join(ROOT, 'shop', 'README.md'), 'utf8')
+    expect(readme).toContain('## Before going live')
+    expect(readme).toContain('guardCheckout')
+  })
+})

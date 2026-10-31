@@ -35,6 +35,16 @@ the total itself. The buyer pays at `/pay/<linkId>` on the business's site.
    verified domains.
 3. If the business ships goods, collect an address before checkout.
 
+## Before going live
+
+Checkout is open to anyone, and every new checkout attempt creates a real
+payment link once test mode is off. A script can call it in a loop: that
+fills the account with unpaid links and uses up the app's request limit, which
+the catalog shares, so the shop stops loading for real buyers. Before you switch
+test mode off, add a bot check (for example Turnstile) or a rate limit in front
+of `/api/checkout`. `guardCheckout` in `src/server/index.ts` is where the check
+goes.
+
 ## Develop and publish
 
 Requires [Bun](https://bun.sh).

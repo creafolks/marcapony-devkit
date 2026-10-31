@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import type { PaymentLink, PaymentLinkLineItem, Product } from 'marcapony-sdk'
 import { errorResponse, marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
 
@@ -84,7 +84,26 @@ interface CheckoutBody {
   items?: unknown
 }
 
-app.post('/api/checkout', async (c) => {
+type ShopContext = Context<{ Bindings: MarcaponyBindings }>
+
+/** A checkout that passed the guard: its attempt id and the merged cart. */
+interface CheckoutRequest {
+  attemptId: string
+  quantities: Map<string, number>
+}
+
+/**
+ * Checkout is open to anonymous visitors, and every accepted request can create
+ * a payment link, so it must be refused as early and as cheaply as possible.
+ * Today this only rejects obviously bad input: a missing attempt id, an empty
+ * or oversized cart, and quantities out of bounds.
+ *
+ * Before going live, add a bot check here (for example a Turnstile token sent
+ * by the checkout form and verified with Turnstile's siteverify endpoint), or
+ * put a rate limit in front of `/api/checkout`. An in-memory counter is not a
+ * rate limit: every Worker isolate has its own memory.
+ */
+async function guardCheckout(c: ShopContext): Promise<CheckoutRequest | Response> {
   const body = (await c.req.json().catch(() => ({}))) as CheckoutBody
   if (typeof body.attemptId !== 'string' || !ATTEMPT_ID.test(body.attemptId)) {
     return c.json({ error: 'attemptId is missing or malformed.' }, 400)
@@ -92,22 +111,33 @@ app.post('/api/checkout', async (c) => {
   if (!Array.isArray(body.items) || body.items.length === 0) {
     return c.json({ error: 'The cart is empty.' }, 400)
   }
+  if (body.items.length > MAX_LINES) {
+    return c.json({ error: `A cart holds at most ${MAX_LINES} lines.` }, 400)
+  }
 
   // Merge repeated lines and refuse anything that is not an id and a whole quantity.
   const quantities = new Map<string, number>()
   for (const item of body.items as Array<{ productId?: unknown; quantity?: unknown }>) {
     const { productId, quantity } = item ?? {}
-    if (typeof productId !== 'string' || productId.length === 0) {
+    if (typeof productId !== 'string' || productId.length === 0 || productId.length > 64) {
       return c.json({ error: 'Every cart line needs a productId.' }, 400)
     }
     if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 1) {
       return c.json({ error: 'Quantities must be whole numbers of at least 1.' }, 400)
     }
-    quantities.set(productId, (quantities.get(productId) ?? 0) + quantity)
+    const merged = (quantities.get(productId) ?? 0) + quantity
+    if (merged > MAX_QUANTITY) {
+      return c.json({ error: `At most ${MAX_QUANTITY} of one product per order.` }, 400)
+    }
+    quantities.set(productId, merged)
   }
-  if (quantities.size > MAX_LINES) {
-    return c.json({ error: `A cart holds at most ${MAX_LINES} different products.` }, 400)
-  }
+  return { attemptId: body.attemptId, quantities }
+}
+
+app.post('/api/checkout', async (c) => {
+  const guarded = await guardCheckout(c)
+  if (guarded instanceof Response) return guarded
+  const { attemptId, quantities } = guarded
 
   const mp = marcaponyFromEnv(c.env)
   const site = await mp.site.get()
@@ -124,9 +154,6 @@ app.post('/api/checkout', async (c) => {
     }
     const price = unitPrice(product)
     if (price === null) return c.json({ error: `${product.name} cannot be bought online.` }, 422)
-    if (quantity > MAX_QUANTITY) {
-      return c.json({ error: `At most ${MAX_QUANTITY} of ${product.name}.` }, 422)
-    }
     if (product.trackStock && product.stock !== null && product.stock < quantity) {
       return c.json({ error: `Only ${product.stock} of ${product.name} left.` }, 422)
     }
@@ -151,7 +178,7 @@ app.post('/api/checkout', async (c) => {
   // the same cart, so a retry cannot create a second link. The cart's contents
   // are part of the key too: a reused attempt id with a different cart must
   // not be answered with the earlier cart's link.
-  const idempotencyKey = `checkout-${body.attemptId}-${await cartFingerprint(quantities)}`
+  const idempotencyKey = `checkout-${attemptId}-${await cartFingerprint(quantities)}`
   const link = (await mp.paymentLinks.create(
     {
       title: `${site.name} order`,
