@@ -81,9 +81,12 @@ Options
   -h        Show this help
 
 Next, in the new directory:
-  npx marcapony app link     get this app's key
-  bun run dev                 run it locally
-  npx marcapony app deploy   put it live
+  bun install       install dependencies, including the Marcapony CLI
+  bun run link      get this app's key
+  bun run dev       run it locally
+  bun run deploy    put it live
+
+The scaffolder runs on Node 20 or newer. The app it creates needs Bun.
 `
 
 export function nextSteps(dir: string): string {
@@ -94,11 +97,11 @@ export function nextSteps(dir: string): string {
     'Next:',
     `  cd ${dir}`,
     '  bun install',
-    '  npx marcapony app link     # writes your app key into .dev.vars',
+    '  bun run link    # writes your app key into .dev.vars',
     '  bun run dev',
     '',
     'When it is ready:',
-    '  npx marcapony app deploy',
+    '  bun run deploy',
     '',
   ].join('\n')
 }

@@ -2,40 +2,49 @@
 
 A small web app with its own backend, connected to your Marcapony account.
 
+Requires [Bun](https://bun.sh): the dev server (`scripts/dev.ts`) runs on it.
+
 ## Get a key
 
 ```sh
-npx marcapony app link
+bun install
+bun run link
 ```
 
 Create the app under **My Apps** in your Marcapony dashboard, generate a
 connection code there, and paste it when asked. The key is written into
-`.dev.vars` for you — it is never shown and never goes through your clipboard.
+`.dev.vars` for you. It is never shown and never goes through your clipboard.
 An `AGENTS.md` is written too, listing exactly what this app is allowed to do, so
 your AI assistant knows what it can build.
+
+`bun run link` and `bun run deploy` use the Marcapony CLI pinned in this
+project's `devDependencies`, so every machine runs the same version.
 
 ## Develop
 
 ```sh
-bun install
 bun run dev
 ```
 
 Your interface and your `/api` routes both run locally.
 
 One thing to know: local development and the published app run in slightly
-different environments. Stick to standard web APIs in `src/server` — `fetch`,
-`Request`, `Response`, `crypto` — since those behave identically in both, and
+different environments. Stick to standard web APIs in `src/server` (`fetch`,
+`Request`, `Response`, `crypto`), since those behave identically in both, and
 check the published app after you change something on the backend.
+
+Locally there is no app id (`MARCAPONY_APP_ID` is set by the platform at deploy)
+and no signed-in visitor, so `identity()` is always null in local dev.
 
 ## Publish
 
 ```sh
-npx marcapony app deploy
+bun run deploy
 ```
 
 That builds your app, publishes it, and prints its address. Marcapony hosts it
-and supplies the key at runtime; there is nothing for you to configure.
+and supplies the key and the app id at runtime; there is nothing for you to
+configure.
 
 ## Layout
 

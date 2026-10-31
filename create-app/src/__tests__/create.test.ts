@@ -213,3 +213,30 @@ describe('run', () => {
     }
   })
 })
+
+describe('commands shown to the user', () => {
+  // The project pins the CLI, so every instruction runs it through the
+  // project's scripts rather than whatever npx or bunx resolves that day.
+  it('uses the pinned CLI scripts everywhere', async () => {
+    const { HELP, nextSteps } = await import('../index')
+    const target = join(tempDir(), 'app')
+    copyTemplate(templateRoot(MODULE_URL), target)
+    const texts = [
+      HELP,
+      nextSteps('app'),
+      readFileSync(join(target, 'README.md'), 'utf8'),
+      readFileSync(join(target, '.dev.vars.example'), 'utf8'),
+      readFileSync(join(target, 'scripts/dev.ts'), 'utf8'),
+      readFileSync(join(target, 'src/server/marcapony.ts'), 'utf8'),
+      readFileSync(new URL('../../README.md', import.meta.url), 'utf8'),
+    ]
+    for (const text of texts) {
+      expect(text).not.toMatch(/(npx|bunx) marcapony/)
+    }
+    const manifest = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>
+    }
+    expect(manifest.scripts.link).toBe('marcapony app link')
+    expect(manifest.scripts.deploy).toBe('marcapony app deploy')
+  })
+})

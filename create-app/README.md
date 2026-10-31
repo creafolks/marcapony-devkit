@@ -7,15 +7,18 @@ connected to your Marcapony account.
 npx create-marcapony-app my-app
 cd my-app
 bun install
-npx marcapony app link
+bun run link
 bun run dev
 ```
 
 When it is ready:
 
 ```sh
-npx marcapony app deploy
+bun run deploy
 ```
+
+`bun run link` and `bun run deploy` run the Marcapony CLI (`marcapony`), which
+the new project pins in its `devDependencies`.
 
 Marcapony hosts it. There is nothing to set up and no other account to sign up
 for.
@@ -29,7 +32,7 @@ for.
 | `src/ui/`                 | Your interface                              |
 | `marcapony.json`          | How Marcapony builds and publishes your app |
 
-`npx marcapony app link` puts your app key in place and writes an `AGENTS.md`
+`bun run link` puts your app key in place and writes an `AGENTS.md`
 listing exactly what this app is allowed to do — so an AI assistant can pick the
 project up and start building on it.
 
@@ -42,7 +45,8 @@ project up and start building on it.
 
 Run without a directory name and it asks for one.
 
-Requires Node 20 or newer, or Bun. No runtime dependencies.
+The scaffolder runs on Node 20 or newer and has no runtime dependencies. The app
+it creates needs [Bun](https://bun.sh): its dev server runs on Bun.
 
 ## License
 

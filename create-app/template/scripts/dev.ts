@@ -4,7 +4,7 @@
  *
  * Caveat worth knowing: this runs under Bun, not the Workers runtime. The two
  * are close but not identical, so a deployed app can still surface something
- * local dev did not. Verify after `bunx marcapony app deploy`, and prefer plain
+ * local dev did not. Verify after `bun run deploy`, and prefer plain
  * web APIs (fetch, Request, Response, crypto) over Node built-ins in
  * `src/server` — those are the ones that behave the same in both.
  */
@@ -30,7 +30,7 @@ function loadDevVars(): Record<string, string> {
 const env = loadDevVars()
 if (!env.MARCAPONY_API_KEY) {
   console.warn(
-    `No MARCAPONY_API_KEY in ${ENV_FILE} — /api routes that call Marcapony will fail.\nRun \`bunx marcapony app link\` to get one.`,
+    `No MARCAPONY_API_KEY in ${ENV_FILE} — /api routes that call Marcapony will fail.\nRun \`bun run link\` to get one.`,
   )
 }
 
