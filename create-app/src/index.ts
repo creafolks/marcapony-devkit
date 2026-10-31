@@ -8,6 +8,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -15,14 +16,35 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
 
 /**
- * `create-marcapony-app` — copies the template in `template/` into a new
- * directory and points its package.json at the chosen name. Deliberately does
+ * `create-marcapony-app` — copies a template from `template/` into a new
+ * directory and points its package.json at the chosen name. Every template is
+ * the shared `template/base/` plus its own overlay (`template/<name>/`), whose
+ * files replace or add to the base. Deliberately does
  * no key handling and no deploy: `marcapony app link` mints the key and
  * `marcapony app deploy` ships the project, and both work on any project, not
  * just a scaffolded one.
  */
 
 const DEFAULT_DIR = 'marcapony-app'
+
+export const TEMPLATES = [
+  { name: 'blank', summary: 'A starting point that lists your products' },
+  { name: 'booking', summary: 'Customers book and cancel appointments in the portal' },
+  { name: 'shop', summary: 'Products, a cart and checkout with a payment link' },
+  { name: 'team-tool', summary: "Your team approves and updates today's reservations" },
+] as const
+
+export type TemplateName = (typeof TEMPLATES)[number]['name']
+export const DEFAULT_TEMPLATE: TemplateName = 'blank'
+const BASE_DIR = 'base'
+
+export function isTemplateName(value: string): value is TemplateName {
+  return TEMPLATES.some((template) => template.name === value)
+}
+
+export function unknownTemplateMessage(name: string): string {
+  return `Unknown template "${name}". Choose one of: ${TEMPLATES.map((t) => t.name).join(', ')}.\n`
+}
 
 /**
  * npm refuses to load a package whose name breaks its rules, and the name here
@@ -57,15 +79,27 @@ export function templateTargetName(name: string): string {
 
 export interface ParsedArgs {
   dir?: string
+  /** As typed; validated by `run`. An empty string means the flag had no value. */
+  template?: string
   force: boolean
   help: boolean
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const out: ParsedArgs = { force: false, help: false }
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!
     if (arg === '--force') out.force = true
     else if (arg === '--help' || arg === '-h') out.help = true
+    else if (arg === '--template' || arg === '-t') {
+      const value = argv[i + 1]
+      if (value !== undefined && !value.startsWith('-')) {
+        out.template = value
+        i++
+      } else {
+        out.template = ''
+      }
+    } else if (arg.startsWith('--template=')) out.template = arg.slice('--template='.length)
     else if (!arg.startsWith('-') && out.dir === undefined) out.dir = arg
   }
   return out
@@ -74,36 +108,47 @@ export function parseArgs(argv: string[]): ParsedArgs {
 export const HELP = `create-marcapony-app — scaffold a Marcapony app
 
 Usage
-  npx create-marcapony-app [directory] [--force]
+  npx create-marcapony-app [directory] [--template <name>] [--force]
+
+Templates
+${TEMPLATES.map((t) => `  ${t.name.padEnd(10)} ${t.summary}`).join('\n')}
 
 Options
-  --force   Write into the directory even if it already has files
-  -h        Show this help
+  --template, -t <name>   Which template to use (asked when omitted in a
+                          terminal, otherwise ${DEFAULT_TEMPLATE})
+  --force                 Write into the directory even if it already has files
+  -h, --help              Show this help
 
 Next, in the new directory:
-  npx marcapony app link     get this app's key
-  bun run dev                 run it locally
-  npx marcapony app deploy   put it live
+  bun install       install dependencies, including the Marcapony CLI
+  bun run link      get this app's key
+  bun run dev       run it locally
+  bun run deploy    put it live
+
+The scaffolder runs on Node 20 or newer. The app it creates needs Bun.
 `
 
-export function nextSteps(dir: string): string {
+export function nextSteps(dir: string, template: TemplateName = DEFAULT_TEMPLATE): string {
   return [
     '',
-    `Created ${dir}.`,
+    `Created ${dir} from the ${template} template.`,
+    '',
+    'Read its README.md first: it says what the app does and which scopes and',
+    'permissions to enable when you create the app in the Marcapony dashboard.',
     '',
     'Next:',
     `  cd ${dir}`,
     '  bun install',
-    '  npx marcapony app link     # writes your app key into .dev.vars',
+    '  bun run link    # writes your app key into .dev.vars',
     '  bun run dev',
     '',
     'When it is ready:',
-    '  npx marcapony app deploy',
+    '  bun run deploy',
     '',
   ].join('\n')
 }
 
-/** Resolve `template/` relative to the compiled entry, not the cwd. */
+/** Resolve `template/` (the directory holding `base/` and every overlay) relative to the compiled entry, not the cwd. */
 export function templateRoot(moduleUrl: string): string {
   return resolve(dirname(fileURLToPath(moduleUrl)), '..', 'template')
 }
@@ -128,6 +173,9 @@ export function copyTemplate(from: string, to: string): void {
     filter: (source) => {
       const relative = source.slice(from.length).replace(/^[/\\]/, '')
       if (relative.length === 0) return true
+      // Always descend: an existing directory (from an overlay, or already in a
+      // --force target) must not hide the files beneath it.
+      if (statSync(source).isDirectory()) return true
       const segments = relative.split(/[/\\]/)
       const last = segments[segments.length - 1]
       if (last === undefined) return true
@@ -146,6 +194,16 @@ export function copyTemplate(from: string, to: string): void {
     }
     renameSync(sourcePath, targetPath)
   }
+}
+
+/**
+ * Scaffold one template: its overlay first, then the base. `copyTemplate` never
+ * overwrites, so an overlay file wins over the base file of the same name, and
+ * neither ever replaces a file that was already in the target.
+ */
+export function scaffoldTemplate(root: string, template: TemplateName, to: string): void {
+  copyTemplate(join(root, template), to)
+  copyTemplate(join(root, BASE_DIR), to)
 }
 
 export function applyPackageName(dir: string, name: string): void {
@@ -169,11 +227,36 @@ async function promptForDir(): Promise<string> {
   }
 }
 
+async function promptForTemplate(): Promise<TemplateName> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    process.stdout.write('Template:\n')
+    TEMPLATES.forEach((t, i) => {
+      process.stdout.write(`  ${i + 1}. ${t.name.padEnd(10)} ${t.summary}\n`)
+    })
+    for (;;) {
+      const answer = (await rl.question(`Choose 1-${TEMPLATES.length} (1): `)).trim()
+      if (answer.length === 0) return DEFAULT_TEMPLATE
+      const byNumber = TEMPLATES[Number(answer) - 1]
+      if (/^\d+$/.test(answer) && byNumber) return byNumber.name
+      if (isTemplateName(answer)) return answer
+      process.stdout.write(`Type a number from 1 to ${TEMPLATES.length}, or a template name.\n`)
+    }
+  } finally {
+    rl.close()
+  }
+}
+
 export async function run(argv: string[], moduleUrl: string): Promise<number> {
   const args = parseArgs(argv)
   if (args.help) {
     process.stdout.write(HELP)
     return 0
+  }
+
+  if (args.template !== undefined && !isTemplateName(args.template)) {
+    process.stderr.write(unknownTemplateMessage(args.template))
+    return 1
   }
 
   const requested = args.dir ?? (process.stdin.isTTY ? await promptForDir() : DEFAULT_DIR)
@@ -186,17 +269,21 @@ export async function run(argv: string[], moduleUrl: string): Promise<number> {
     return 1
   }
 
-  const template = templateRoot(moduleUrl)
-  if (!existsSync(template)) {
+  const root = templateRoot(moduleUrl)
+  if (!existsSync(join(root, BASE_DIR))) {
     process.stderr.write(
-      `The template directory is missing from this install (looked in ${template}). Reinstall create-marcapony-app.\n`,
+      `The template directory is missing from this install (looked in ${root}). Reinstall create-marcapony-app.\n`,
     )
     return 1
   }
 
-  copyTemplate(template, target)
+  const template: TemplateName =
+    (args.template as TemplateName | undefined) ??
+    (process.stdin.isTTY ? await promptForTemplate() : DEFAULT_TEMPLATE)
+
+  scaffoldTemplate(root, template, target)
   applyPackageName(target, sanitizePackageName(basename(target)))
-  process.stdout.write(nextSteps(requested))
+  process.stdout.write(nextSteps(requested, template))
   return 0
 }
 

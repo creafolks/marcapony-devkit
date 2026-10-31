@@ -50,6 +50,13 @@ jobs:
         run: bun test
         working-directory: ${{ matrix.pkg }}
 
+      # Scaffolds every template and runs tsc plus the worker bundle against
+      # the SDK built from this checkout, so a template cannot drift from it.
+      - name: Check templates
+        if: matrix.pkg == 'create-app'
+        run: bun run check:templates
+        working-directory: create-app
+
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -95,7 +102,7 @@ jobs:
 
           CHANGED=$(git diff --name-only "$BASE...HEAD" -- \
             "$PKG/src" "$PKG/template" "$PKG/package.json" "$PKG/tsconfig.build.json" \
-            "$PKG/README.md" "$PKG/LICENSE.md" \
+            "$PKG/README.md" "$PKG/LICENSE.md" tsconfig.base.json \
             ":(exclude)$PKG/src/__tests__")
           if [ -z "$CHANGED" ]; then
             echo "No shipped $PKG files changed, no version bump needed."

@@ -1,7 +1,7 @@
 {
   "name": "create-marcapony-app",
-  "version": "0.1.2",
-  "description": "Scaffold a Marcapony app — a Worker backed by the Marcapony API, ready for `marcapony app link` and `marcapony app deploy`",
+  "version": "0.2.1",
+  "description": "Scaffold a Marcapony app \u2014 a Worker backed by the Marcapony API, ready for `marcapony app link` and `marcapony app deploy`",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.md",
   "homepage": "https://marcapony.com",
@@ -27,7 +27,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "check:templates": "bun run scripts/check-templates.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",

@@ -5,8 +5,8 @@ Tools for building apps on [Marcapony](https://marcapony.com) and publishing the
 | Package | npm | What it is |
 |---|---|---|
 | [`sdk`](./sdk) | [`marcapony-sdk`](https://www.npmjs.com/package/marcapony-sdk) | Typed client for the Marcapony external API (`/ext/v1`), used by an app's server code |
-| [`cli`](./cli) | [`marcapony`](https://www.npmjs.com/package/marcapony) | Links a project to an app on your Marcapony account and deploys it (`bunx marcapony app link`, `bunx marcapony app deploy`) |
-| [`create-app`](./create-app) | [`create-marcapony-app`](https://www.npmjs.com/package/create-marcapony-app) | Scaffolds a new app (`bunx create-marcapony-app my-app`) |
+| [`cli`](./cli) | [`marcapony`](https://www.npmjs.com/package/marcapony) | Links a project to an app on your Marcapony account and deploys it (`npx marcapony app link`, `npx marcapony app deploy`) |
+| [`create-app`](./create-app) | [`create-marcapony-app`](https://www.npmjs.com/package/create-marcapony-app) | Scaffolds a new app (`npx create-marcapony-app my-app`) |
 
 Each package has its own README with usage details.
 
