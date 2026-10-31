@@ -38,7 +38,6 @@ minor release may contain breaking changes; each one is listed below.
   resource group) and `ListPostsParams`, so a function can accept one part of
   the client.
 
-## [0.6.0]
+## [0.6.0] and earlier
 
-- Scoped calls for signed-in people: `forRequest(request).me` for customers and
-  the account groups for team members.
+Not recorded here; see the repository history.
