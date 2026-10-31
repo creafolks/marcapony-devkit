@@ -15,10 +15,7 @@ export type { MediaResource } from './resources/media.js'
 export type { OrdersResource } from './resources/orders.js'
 export type { DiscountsResource, PaymentLinksResource } from './resources/payments.js'
 export type { PostsResource } from './resources/posts.js'
-export type {
-  AvailabilityBlocksResource,
-  ReservationsResource,
-} from './resources/reservations.js'
+export type { AvailabilityBlocksResource, ReservationsResource } from './resources/reservations.js'
 export type { RegionsResource, SiteResource } from './resources/site.js'
 export * from './errors.js'
 export { IDENTITY_HEADER, type Identity } from './identity.js'

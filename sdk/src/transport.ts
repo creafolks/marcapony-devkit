@@ -86,7 +86,11 @@ export class Transport {
   }
 
   /** One fetch under the per-attempt timeout. Network failures and aborts are retryable. */
-  private async attempt(url: string, init: RequestInit, args: RequestArgs): Promise<AttemptOutcome> {
+  private async attempt(
+    url: string,
+    init: RequestInit,
+    args: RequestArgs,
+  ): Promise<AttemptOutcome> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs)
     try {

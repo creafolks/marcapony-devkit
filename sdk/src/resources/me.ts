@@ -28,8 +28,10 @@ export function meResource(t: Transport) {
       /** One of the customer's reservations; another customer's id answers 404. */
       get: (id: string): Promise<OwnReservation> => get(t, path`/me/reservations/${id}`),
       /** Books a reservation for the signed-in customer. */
-      create: (input: CreateOwnReservationInput, options?: RequestOptions): Promise<OwnReservation> =>
-        create(t, path`/me/reservations`, input, options),
+      create: (
+        input: CreateOwnReservationInput,
+        options?: RequestOptions,
+      ): Promise<OwnReservation> => create(t, path`/me/reservations`, input, options),
       /** Cancels one of the customer's reservations. */
       cancel: (id: string): Promise<{ id: string; status: 'cancelled' }> =>
         update(t, path`/me/reservations/${id}`, { status: 'cancelled' }),

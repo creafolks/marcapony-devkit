@@ -15,16 +15,19 @@ import type {
 export function reservationsResource(t: Transport) {
   return {
     /** One page of the account's reservations. */
-    list: (params?: ListParams): Promise<Page<Reservation>> =>
-      list(t, path`/reservations`, params),
+    list: (params?: ListParams): Promise<Page<Reservation>> => list(t, path`/reservations`, params),
     /** One reservation by id. */
     get: (id: string): Promise<Reservation> => get(t, path`/reservations/${id}`),
     /** Books a reservation for a customer (created from name and e-mail when new). */
-    create: (input: CreateReservationInput, options?: RequestOptions): Promise<CreatedReservation> =>
-      create(t, path`/reservations`, input, options),
+    create: (
+      input: CreateReservationInput,
+      options?: RequestOptions,
+    ): Promise<CreatedReservation> => create(t, path`/reservations`, input, options),
     /** Approves, rejects, cancels or completes a reservation. */
-    updateStatus: (id: string, input: UpdateReservationStatusInput): Promise<ReservationStatusChange> =>
-      update(t, path`/reservations/${id}`, input),
+    updateStatus: (
+      id: string,
+      input: UpdateReservationStatusInput,
+    ): Promise<ReservationStatusChange> => update(t, path`/reservations/${id}`, input),
   }
 }
 

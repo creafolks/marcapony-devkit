@@ -33,7 +33,11 @@ describe('baseUrl', () => {
       urls.push(String(url))
       return new Response(JSON.stringify({ data: {} }), { status: 200 })
     }) as typeof globalThis.fetch
-    const mp = createClient({ apiKey: 'mpk_x', baseUrl: 'https://x.test/ext/v1//', fetch: fetchImpl })
+    const mp = createClient({
+      apiKey: 'mpk_x',
+      baseUrl: 'https://x.test/ext/v1//',
+      fetch: fetchImpl,
+    })
     await mp.site.get()
     expect(urls[0]).toBe('https://x.test/ext/v1/site')
   })

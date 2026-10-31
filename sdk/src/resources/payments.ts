@@ -18,8 +18,10 @@ export function paymentLinksResource(t: Transport) {
     /** One payment link by id. */
     get: (id: string): Promise<PaymentLink> => get(t, path`/payment-links/${id}`),
     /** Creates a payment link for a free amount; send the customer its `paymentUrl`. */
-    create: (input: CreatePaymentLinkInput, options?: RequestOptions): Promise<CreatedPaymentLink> =>
-      create(t, path`/payment-links`, input, options),
+    create: (
+      input: CreatePaymentLinkInput,
+      options?: RequestOptions,
+    ): Promise<CreatedPaymentLink> => create(t, path`/payment-links`, input, options),
   }
 }
 
