@@ -38,7 +38,7 @@ describe('createClient', () => {
     const site = await mp.site.get()
     expect(site).toEqual({ id: 's1', name: 'Acme' } as never)
     expect(calls[0]?.url).toBe('https://x.test/ext/v1/site')
-    expect((calls[0]?.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${KEY}`)
+    expect((calls[0]?.init.headers as Record<string, string>)?.Authorization).toBe(`Bearer ${KEY}`)
   })
 
   it('serializes list params and returns data + meta', async () => {
