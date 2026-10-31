@@ -128,9 +128,19 @@ export default {
   show the wrong UI, never someone else's data.
 - `who.permissions` lists the permission ids from your `marcapony.json` that
   the owner granted this person; `who.can(id)` checks one.
-- `forRequest(request).me` offers `reservations.list/get/create/cancel` and
-  `orders.list/get`. Never use the account-wide client for a visitor: its key
-  sees every customer's records.
+- `forRequest(request).me` offers `profile.get`,
+  `reservations.list/get/create/cancel` (with `status`, `from` and `to`
+  filters and the deposit state), `orders.list/get`, `paymentLinks.list/get`
+  and `formSubmissions.list` (which forms were sent and when, never the
+  answers). Each call is limited to the visitor by the platform; another
+  customer's id answers 404.
+- A portal app serving customers cannot read customer data with its plain
+  client at all: without an identity those calls answer 403
+  `identity_required` (`PermissionDeniedError`), even when the key holds the
+  scope. The plain client still reads the catalog (site, products, business)
+  and can book or send a form for an anonymous visitor.
+- Create the scoped client per request and never keep it, or what it
+  returned, in module scope: one worker serves many visitors.
 - Never read, log or forward the `x-marcapony-identity` header or the portal
   session cookie yourself. The platform removes the cookie before your app runs.
 
@@ -154,10 +164,28 @@ if (who?.kind === 'member') {
 `orders.list/get` and `customers.list/get` for a member. The platform narrows
 each call to the key's scopes, the permissions the owner granted and the
 member's own role, so a viewer cannot write through a tool an admin built. A
-customer's identity is refused on these routes.
+customer's identity is refused on these routes, and an app is either
+customer-facing or a team tool, never both: the dashboard sets which one
+(`dataAccess` `customer` or `team`), and the platform refuses the other kind of
+identity. `forRequest(request).kind` tells you which kind the request carries.
 
 When `who.preview` is true the owner is previewing the app, and the platform
 simulates every write. Show a banner rather than claim a change was saved.
+
+## Data access
+
+Every app declares whose data it works with (`dataAccess` in `marcapony.json`,
+set in the dashboard):
+
+| `dataAccess` | Placement | Plain client (no identity)                                      |
+| ------------ | --------- | --------------------------------------------------------------- |
+| `account`    | site      | every route its scopes allow (integrations, back-office tools)  |
+| `visitor`    | site      | catalog reads, bookings and form entries for anonymous visitors |
+| `customer`   | portal    | the same as `visitor`; `me.*` through `forRequest()`            |
+| `team`       | portal    | the same as `visitor`; account groups through `forRequest()`    |
+
+A deploy can only narrow it (`account` to `visitor`, or choose `customer` or
+`team` when moving into the portal). Widening is done in the dashboard.
 
 ## Amounts are computed server-side
 

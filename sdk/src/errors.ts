@@ -61,6 +61,7 @@ const ERROR_BY_CODE: Record<
   conflict: ConflictError,
   invalid_identity: UnauthorizedError,
   scoped_route_required: PermissionDeniedError,
+  identity_required: PermissionDeniedError,
   server_error: ServerError,
 }
 
