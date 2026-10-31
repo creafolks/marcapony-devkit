@@ -8,7 +8,15 @@
  *
  * Pass --keep to leave the scaffolded projects behind for inspection.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { scaffoldTemplate, TEMPLATES } from '../src/index'
@@ -37,7 +45,9 @@ interface Manifest {
   dependencies: Record<string, string>
   devDependencies: Record<string, string>
 }
-const manifest = JSON.parse(readFileSync(join(TEMPLATE_ROOT, 'base', '_package.json'), 'utf8')) as Manifest
+const manifest = JSON.parse(
+  readFileSync(join(TEMPLATE_ROOT, 'base', '_package.json'), 'utf8'),
+) as Manifest
 
 // One shared install for all templates: they share the base's dependencies,
 // and Node resolution walks up from each project into this node_modules. The

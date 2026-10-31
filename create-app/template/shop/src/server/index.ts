@@ -55,7 +55,9 @@ async function cartFingerprint(quantities: Map<string, number>): Promise<string>
     .map(([id, quantity]) => `${id}:${quantity}`)
     .join(',')
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical))
-  return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return [...new Uint8Array(digest).slice(0, 8)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 app.get('/api/health', (c) => c.json({ ok: true }))
@@ -192,10 +194,19 @@ app.post('/api/checkout', async (c) => {
   // In test mode the link is only simulated: nothing was saved and there is
   // nothing to pay yet, so there is no payment page either.
   if (link.simulated) {
-    return c.json({ amount, currency, payUrl: null, linkId: link.linkId ?? null, simulated: true }, 201)
+    return c.json(
+      { amount, currency, payUrl: null, linkId: link.linkId ?? null, simulated: true },
+      201,
+    )
   }
   return c.json(
-    { amount, currency: link.currency, payUrl: link.paymentUrl, linkId: link.linkId, simulated: false },
+    {
+      amount,
+      currency: link.currency,
+      payUrl: link.paymentUrl,
+      linkId: link.linkId,
+      simulated: false,
+    },
     201,
   )
 })

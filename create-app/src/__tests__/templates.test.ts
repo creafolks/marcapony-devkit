@@ -54,7 +54,12 @@ function captureStderr(): { text: () => string; restore: () => void } {
     buffer += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
     return true
   }) as typeof process.stderr.write
-  return { text: () => buffer, restore: () => void (process.stderr.write = original) }
+  return {
+    text: () => buffer,
+    restore: () => {
+      process.stderr.write = original
+    },
+  }
 }
 
 /** Every field `MarcaponyConfig` declares, read from the CLI's own source. */
@@ -129,14 +134,18 @@ describe.each(NAMES as TemplateName[])('the %s template', (name) => {
       )
     }
     const overlayConfig = join(ROOT, name, 'marcapony.json')
-    const expected = existsSync(overlayConfig) ? overlayConfig : join(ROOT, 'base', 'marcapony.json')
+    const expected = existsSync(overlayConfig)
+      ? overlayConfig
+      : join(ROOT, 'base', 'marcapony.json')
     expect(readFileSync(join(target, 'marcapony.json'), 'utf8')).toBe(
       readFileSync(expected, 'utf8'),
     )
   })
 
   it('has a marcapony.json that only uses keys the CLI knows', () => {
-    const config = JSON.parse(readFileSync(join(scaffold(), 'marcapony.json'), 'utf8')) as TemplateConfig
+    const config = JSON.parse(
+      readFileSync(join(scaffold(), 'marcapony.json'), 'utf8'),
+    ) as TemplateConfig
     const known = cliConfigKeys()
     for (const key of Object.keys(config)) expect(known.has(key)).toBe(true)
     // `app` is written by `bun run link`; a template must not invent one.
@@ -149,7 +158,9 @@ describe.each(NAMES as TemplateName[])('the %s template', (name) => {
   })
 
   it('only grants platform permissions the CLI documents', () => {
-    const config = JSON.parse(readFileSync(join(scaffold(), 'marcapony.json'), 'utf8')) as TemplateConfig
+    const config = JSON.parse(
+      readFileSync(join(scaffold(), 'marcapony.json'), 'utf8'),
+    ) as TemplateConfig
     const cliSource = readFileSync(new URL('../../../cli/src/config.ts', import.meta.url), 'utf8')
     for (const permission of config.permissions ?? []) {
       expect(permission.id).toMatch(/^[a-z][a-z0-9-]*$/)
@@ -165,7 +176,9 @@ describe.each(NAMES as TemplateName[])('the %s template', (name) => {
     }
     expect(readme).toContain('Scopes')
     expect(readme).not.toMatch(/(npx|bunx) marcapony/)
-    const config = JSON.parse(readFileSync(join(scaffold(), 'marcapony.json'), 'utf8')) as TemplateConfig
+    const config = JSON.parse(
+      readFileSync(join(scaffold(), 'marcapony.json'), 'utf8'),
+    ) as TemplateConfig
     for (const permission of config.permissions ?? []) expect(readme).toContain(permission.id)
   })
 

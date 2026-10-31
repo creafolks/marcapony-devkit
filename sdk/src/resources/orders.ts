@@ -18,8 +18,10 @@ export function ordersResource(t: Transport) {
     /** One order with its line items. */
     get: (id: string): Promise<OrderWithItems> => get(t, path`/orders/${id}`),
     /** Creates an order from catalog items; costs are computed on the server. */
-    create: (input: CreateOrderInput, options?: RequestOptions): Promise<WriteResult<CreatedOrder>> =>
-      create(t, path`/orders`, input, options),
+    create: (
+      input: CreateOrderInput,
+      options?: RequestOptions,
+    ): Promise<WriteResult<CreatedOrder>> => create(t, path`/orders`, input, options),
   }
 }
 

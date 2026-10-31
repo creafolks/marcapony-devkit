@@ -85,8 +85,8 @@ export function App() {
       <p className="muted">Signed in as {me.email}</p>
       {me.preview ? (
         <p className="notice">
-          Preview: you are viewing this page as a customer. Bookings and cancellations are
-          simulated and nothing is saved.
+          Preview: you are viewing this page as a customer. Bookings and cancellations are simulated
+          and nothing is saved.
         </p>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
@@ -176,7 +176,12 @@ function BookingForm({ onBooked }: { onBooked: () => void }) {
       </label>
       <label>
         Notes (optional)
-        <textarea rows={3} maxLength={500} value={notes} onChange={(e) => edit(setNotes)(e.target.value)} />
+        <textarea
+          rows={3}
+          maxLength={500}
+          value={notes}
+          onChange={(e) => edit(setNotes)(e.target.value)}
+        />
       </label>
       <button type="submit" disabled={busy}>
         {busy ? 'Booking…' : 'Book'}

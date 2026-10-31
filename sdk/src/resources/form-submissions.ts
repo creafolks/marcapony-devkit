@@ -16,7 +16,10 @@ export function formSubmissionsResource(t: Transport) {
     list: (params?: ListParams): Promise<Page<FormSubmission>> =>
       list(t, path`/form-submissions`, params),
     /** Sends a form entry, as a site visitor would. */
-    create: (input: SubmitFormInput, options?: RequestOptions): Promise<WriteResult<FormSubmissionReceipt>> =>
+    create: (
+      input: SubmitFormInput,
+      options?: RequestOptions,
+    ): Promise<WriteResult<FormSubmissionReceipt>> =>
       create(t, path`/form-submissions`, input, options),
   }
 }
