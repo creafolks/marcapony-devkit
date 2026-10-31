@@ -19,7 +19,10 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
   })
   const body = (await response.json().catch(() => ({}))) as { error?: string }
   if (!response.ok) {
-    throw new ApiError(response.status, body.error ?? `Request failed with status ${response.status}`)
+    throw new ApiError(
+      response.status,
+      body.error ?? `Request failed with status ${response.status}`,
+    )
   }
   return body as T
 }

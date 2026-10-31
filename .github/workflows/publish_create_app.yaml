@@ -26,6 +26,10 @@ on:
   push:
     branches:
       - main
+    # Only the package's own directory. Root files (bun.lock, package.json,
+    # tsconfig.base.json, biome.json) deliberately do not trigger a publish:
+    # nothing ships until create-app/package.json gets a new version, and that
+    # change lands under create-app/ anyway. Use workflow_dispatch to force a run.
     paths:
       - 'create-app/**'
 
@@ -76,10 +80,11 @@ jobs:
             echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
           fi
 
+      # The repository is a Bun workspace with one lockfile at the root, so
+      # install there; build, test and publish still run from create-app/.
       - name: Install dependencies
         if: steps.decide.outputs.publish == 'true'
         run: bun install --frozen-lockfile
-        working-directory: create-app
 
       - name: Type check + test + build
         if: steps.decide.outputs.publish == 'true'

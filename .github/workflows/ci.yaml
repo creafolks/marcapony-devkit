@@ -36,9 +36,9 @@ jobs:
         with:
           bun-version: 1.4.4
 
+      # One install at the root covers every workspace package.
       - name: Install
         run: bun install --frozen-lockfile
-        working-directory: ${{ matrix.pkg }}
 
       - name: Type check + build
         run: bunx tsc --noEmit && bun run build
@@ -56,6 +56,24 @@ jobs:
         if: matrix.pkg == 'create-app'
         run: bun run check:templates
         working-directory: create-app
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Biome
+        run: bunx biome ci .
 
   version-gate:
     # npm refuses to re-publish an existing version, so shipping package code
@@ -84,7 +102,7 @@ jobs:
 
           CHANGED=$(git diff --name-only "$BASE...HEAD" -- \
             "$PKG/src" "$PKG/template" "$PKG/package.json" "$PKG/tsconfig.build.json" \
-            "$PKG/README.md" "$PKG/LICENSE.md" \
+            "$PKG/README.md" "$PKG/LICENSE.md" tsconfig.base.json \
             ":(exclude)$PKG/src/__tests__")
           if [ -z "$CHANGED" ]; then
             echo "No shipped $PKG files changed, no version bump needed."

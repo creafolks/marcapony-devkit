@@ -12,16 +12,16 @@ Each package has its own README with usage details.
 
 ## Development
 
-Every package is self-contained and uses [Bun](https://bun.sh):
+The repository is a [Bun](https://bun.sh) workspace with one lockfile at the root. Install once there:
 
 ```bash
-cd sdk   # or cli, create-app
 bun install
-bunx tsc --noEmit && bun run build
-bun test
+bun run check   # Biome, then type check, build and test every package
 ```
 
-A change to a package's shipped files (`src`, `template`, `package.json`, `README.md`, `LICENSE.md`) needs a version bump in that package's `package.json`; CI checks this. Releases are published to npm from `main` when the version changes.
+`bun run typecheck`, `bun run build` and `bun run test` run that step in every package; inside a package directory the same scripts run for that package only. Formatting and linting use [Biome](https://biomejs.dev): `bun run format` rewrites files, `bun run lint` reports lint problems, and CI runs `bunx biome ci .`.
+
+A change to a package's shipped files (`src`, `template`, `package.json`, `README.md`, `LICENSE.md`, or the shared `tsconfig.base.json`) needs a version bump in that package's `package.json`; CI checks this. Run `bun install` after a bump so the root `bun.lock` records the new version, and commit both. Releases are published to npm from `main` when the version changes.
 
 ## License
 

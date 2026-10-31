@@ -1,6 +1,6 @@
 {
   "name": "create-marcapony-app",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Scaffold a Marcapony app \u2014 a Worker backed by the Marcapony API, ready for `marcapony app link` and `marcapony app deploy`",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.md",

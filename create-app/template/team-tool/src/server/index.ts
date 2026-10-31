@@ -101,7 +101,11 @@ app.post('/api/reservations/:id/status', async (c) => {
     return c.json({ error: 'status must be approved, rejected, cancelled or completed.' }, 400)
   }
   const input: UpdateReservationStatusInput = { status }
-  if (status === 'rejected' && typeof body.rejectionReason === 'string' && body.rejectionReason.trim()) {
+  if (
+    status === 'rejected' &&
+    typeof body.rejectionReason === 'string' &&
+    body.rejectionReason.trim()
+  ) {
     input.rejectionReason = body.rejectionReason.trim().slice(0, 500)
   }
 

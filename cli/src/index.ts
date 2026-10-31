@@ -15,7 +15,7 @@ export * from './agents.js'
 
 // Kept in step with cli/package.json by a test — `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.4.2'
+const VERSION = '0.4.3'
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
