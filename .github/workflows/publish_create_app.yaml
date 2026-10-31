@@ -1,0 +1,99 @@
+name: Publish create-marcapony-app
+
+# The scaffolder goes to PUBLIC npm as `create-marcapony-app`, so `bunx
+# create-marcapony-app my-app` works with no registry config and no auth.
+#
+# Releases are driven entirely by the version in create-app/package.json: this
+# job compares it against what npm already serves and exits quietly when they
+# match, so a re-run, an unrelated main push, or a publish someone did by hand
+# can never double-publish.
+#
+# Deliberately a separate file from publish_cli.yaml and publish_sdk.yaml even
+# though the three are nearly identical: npm binds a trusted publisher to an
+# exact workflow filename, so folding them into one matrix would invalidate the
+# trust records already configured for the other packages. Do not consolidate.
+#
+# It needs a trusted publisher on npmjs.com for `create-marcapony-app` pointing
+# at creafolks/marcapony-devkit + this filename. npm cannot register one for a
+# package that has never been published — the 0.0.1 name-reservation stub
+# already up there satisfies that.
+#
+# This repository is public, so npm attaches provenance to trusted-publishing
+# releases on its own; no `--provenance` flag is needed.
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'create-app/**'
+
+permissions:
+  # OIDC token for trusted publishing.
+  id-token: write
+  # Pushing the create-app-v<version> tag.
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1. Node 24 bundles an npm that is
+      # close to but not reliably above that line, so pin the floor explicitly
+      # rather than inherit whatever the runner image happens to ship.
+      - name: Ensure npm supports trusted publishing
+        run: npm install -g npm@latest && npm --version
+
+      - name: Decide whether this version needs publishing
+        id: decide
+        working-directory: create-app
+        run: |
+          LOCAL=$(node -p "require('./package.json').version")
+          # A never-published package 404s here; treat that as "publish it".
+          REMOTE=$(npm view create-marcapony-app version 2>/dev/null || echo "none")
+          echo "local=$LOCAL remote=$REMOTE"
+          if [ "$LOCAL" = "$REMOTE" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "create-marcapony-app@$LOCAL is already on npm — nothing to do."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.decide.outputs.publish == 'true'
+        run: bun install --frozen-lockfile
+        working-directory: create-app
+
+      - name: Type check + test + build
+        if: steps.decide.outputs.publish == 'true'
+        run: bunx tsc --noEmit && bun test && bun run build
+        working-directory: create-app
+
+      - name: Publish
+        if: steps.decide.outputs.publish == 'true'
+        run: npm publish --access public
+        working-directory: create-app
+
+      - name: Tag the released commit
+        if: steps.decide.outputs.publish == 'true'
+        run: |
+          TAG="create-app-v${{ steps.decide.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"

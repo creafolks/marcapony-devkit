@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# This repository is public. Every job runs on GitHub-hosted runners only:
+# a self-hosted runner would execute code from fork pull requests on our own
+# machines. Do not switch these to a runner variable or a self-hosted label.
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [sdk, cli, create-app]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install
+        run: bun install --frozen-lockfile
+        working-directory: ${{ matrix.pkg }}
+
+      - name: Type check + build
+        run: bunx tsc --noEmit && bun run build
+        working-directory: ${{ matrix.pkg }}
+
+      # create-app builds first: its suite scaffolds from template/ through the
+      # compiled entry, so it also proves the published layout resolves.
+      - name: Test
+        run: bun test
+        working-directory: ${{ matrix.pkg }}
+
+  version-gate:
+    # npm refuses to re-publish an existing version, so shipping package code
+    # without bumping its package.json means the change silently never reaches
+    # anyone. Only files that end up in the tarball count; tests can change
+    # freely. README.md and LICENSE.md count because npm publishes both.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [cli, sdk, create-app]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a version bump when shipped ${{ matrix.pkg }} files change
+        env:
+          PKG: ${{ matrix.pkg }}
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" --quiet
+
+          CHANGED=$(git diff --name-only "$BASE...HEAD" -- \
+            "$PKG/src" "$PKG/template" "$PKG/package.json" "$PKG/tsconfig.build.json" \
+            "$PKG/README.md" "$PKG/LICENSE.md" \
+            ":(exclude)$PKG/src/__tests__")
+          if [ -z "$CHANGED" ]; then
+            echo "No shipped $PKG files changed, no version bump needed."
+            exit 0
+          fi
+          echo "Changed:"; echo "$CHANGED"
+
+          if ! git cat-file -e "${BASE}:${PKG}/package.json" 2>/dev/null; then
+            echo "$PKG does not exist on $BASE yet, first release."
+            exit 0
+          fi
+          git show "${BASE}:${PKG}/package.json" > "$RUNNER_TEMP/base-package.json"
+          BASE_V=$(node -p "require(process.env.RUNNER_TEMP + '/base-package.json').version")
+          HEAD_V=$(node -p "require('./$PKG/package.json').version")
+
+          if [ "$BASE_V" = "$HEAD_V" ]; then
+            echo "::error::$PKG/package.json is still $HEAD_V but shipped $PKG files changed. Run 'npm version patch|minor|major' in $PKG/."
+            exit 1
+          fi
+
+          HIGHER=$(printf '%s\n%s\n' "$BASE_V" "$HEAD_V" | sort -V | tail -1)
+          if [ "$HIGHER" != "$HEAD_V" ]; then
+            echo "::error::$PKG/package.json went backwards: $BASE_V -> $HEAD_V."
+            exit 1
+          fi
+          echo "$PKG version $BASE_V -> $HEAD_V."

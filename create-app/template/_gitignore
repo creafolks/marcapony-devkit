@@ -1,0 +1,5 @@
+node_modules
+dist
+
+# Holds a live Marcapony app key — `marcapony app link` writes it here.
+.dev.vars

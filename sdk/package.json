@@ -1,0 +1,40 @@
+{
+  "name": "marcapony-sdk",
+  "version": "0.5.1",
+  "description": "Official client for the Marcapony external API (/ext/v1)",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "homepage": "https://marcapony.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creafolks/marcapony-devkit.git",
+    "directory": "sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^5.8.3"
+  }
+}
