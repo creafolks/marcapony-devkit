@@ -77,9 +77,12 @@ export interface CreatedReservation {
   requestedDate: string
   /** HH:mm */
   requestedTime: string
-  /** Minutes. */
-  duration: number | null
-  createdAt: string | null
+  /** Minutes. Absent on a deposit booking made with an account-wide key. */
+  duration?: number | null
+  /** Absent on a deposit booking made with an account-wide key. */
+  createdAt?: string | null
+  /** Present on a deposit booking: the payment link the customer pays the deposit through. */
+  deposit?: { linkId: string; amount: number; currency: string }
 }
 
 /** What `reservations.updateStatus` answers with. */

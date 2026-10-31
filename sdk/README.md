@@ -60,6 +60,20 @@ for (let page = 1; ; page++) {
 }
 ```
 
+## Test mode
+
+A new app starts in test mode: reads return real data, writes are not saved.
+A create or update then resolves to its input echoed back with an id and
+`simulated: true`, without server-computed fields such as `paymentUrl`:
+
+```ts
+const link = await mp.paymentLinks.create(input, { idempotencyKey })
+if (link.simulated) return showNothingToPay()
+sendToCustomer(link.paymentUrl)
+```
+
+The owner turns test mode off in the dashboard.
+
 ## Errors, retries and rate limits
 
 Every non-2xx response throws a subclass of `MarcaponyError` with `status`,

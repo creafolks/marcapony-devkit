@@ -13,9 +13,14 @@ minor release may contain breaking changes; each one is listed below.
   `reservations.updateStatus` to `ReservationStatusChange`, `orders.create` to
   `CreatedOrder`, `paymentLinks.create` to `CreatedPaymentLink` (with the
   `paymentUrl` to send the customer) and `formSubmissions.create` to
-  `FormSubmissionReceipt`. The same applies to the reservation calls of
-  `forRequest()` for team members. Code that cast these results may need its
-  casts removed.
+  `FormSubmissionReceipt`, each wrapped in `WriteResult<T>`. The same applies
+  to the reservation calls of `forRequest()` for team members. Code that cast
+  these results may need its casts removed.
+- `WriteResult<T>` is either the saved record or, in test mode (where every new
+  app starts), a `SimulatedWrite<T>`: the input echoed back with an id,
+  timestamps and `simulated: true`, without the fields the server computes
+  (no `paymentUrl` on a simulated payment link). Check `result.simulated`
+  before reading those fields.
 - `posts.delete`, `blogAuthors.delete` and `blogCategories.delete` resolve to
   `void`. Their response bodies differed between resources and were never part
   of the contract.

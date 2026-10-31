@@ -8,6 +8,7 @@ import type {
   Page,
   PaymentLink,
   RequestOptions,
+  WriteResult,
 } from '../types/index.js'
 
 export function paymentLinksResource(t: Transport) {
@@ -21,7 +22,7 @@ export function paymentLinksResource(t: Transport) {
     create: (
       input: CreatePaymentLinkInput,
       options?: RequestOptions,
-    ): Promise<CreatedPaymentLink> => create(t, path`/payment-links`, input, options),
+    ): Promise<WriteResult<CreatedPaymentLink>> => create(t, path`/payment-links`, input, options),
   }
 }
 

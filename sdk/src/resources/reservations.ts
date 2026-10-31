@@ -10,6 +10,7 @@ import type {
   Reservation,
   ReservationStatusChange,
   UpdateReservationStatusInput,
+  WriteResult,
 } from '../types/index.js'
 
 export function reservationsResource(t: Transport) {
@@ -22,12 +23,12 @@ export function reservationsResource(t: Transport) {
     create: (
       input: CreateReservationInput,
       options?: RequestOptions,
-    ): Promise<CreatedReservation> => create(t, path`/reservations`, input, options),
+    ): Promise<WriteResult<CreatedReservation>> => create(t, path`/reservations`, input, options),
     /** Approves, rejects, cancels or completes a reservation. */
     updateStatus: (
       id: string,
       input: UpdateReservationStatusInput,
-    ): Promise<ReservationStatusChange> => update(t, path`/reservations/${id}`, input),
+    ): Promise<WriteResult<ReservationStatusChange>> => update(t, path`/reservations/${id}`, input),
   }
 }
 

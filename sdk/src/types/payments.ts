@@ -79,6 +79,6 @@ export interface CreatedPaymentLink {
   status: PaymentLinkStatus
   expiresAt: string | null
   createdAt: string
-  /** The page where the customer pays; send this to them. */
+  /** The page where the customer pays; send this to them. Not returned in test mode. */
   paymentUrl: string
 }
