@@ -1,0 +1,11 @@
+{
+  "name": "marcapony-devkit",
+  "private": true,
+  "type": "module",
+  "workspaces": ["sdk", "cli", "create-app"],
+  "scripts": {
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "build": "bun run --filter '*' build"
+  }
+}
