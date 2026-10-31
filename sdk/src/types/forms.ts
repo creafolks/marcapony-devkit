@@ -18,3 +18,13 @@ export interface SubmitFormInput {
   productId?: string
   turnstileToken?: string | null
 }
+
+/**
+ * What `formSubmissions.create` answers with. The fields can be missing or
+ * null when the platform accepted an entry without storing it.
+ */
+export interface FormSubmissionReceipt {
+  id?: string | null
+  formId?: string | null
+  submittedAt?: string | null
+}

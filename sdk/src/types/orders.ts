@@ -55,3 +55,13 @@ export interface OrderAddressInput {
   zipCode: string
   contactName?: string
 }
+
+/** What `orders.create` answers with; read the full order with `orders.get`. */
+export interface CreatedOrder {
+  id: string
+  orderNumber: number | null
+  status: number
+  paymentStatus: number
+  currency: string | null
+  createdAt: string
+}

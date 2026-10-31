@@ -2,6 +2,7 @@ import { path } from '../path.js'
 import { create, list, type Transport } from '../transport.js'
 import type {
   FormSubmission,
+  FormSubmissionReceipt,
   ListParams,
   Page,
   RequestOptions,
@@ -14,7 +15,7 @@ export function formSubmissionsResource(t: Transport) {
     list: (params?: ListParams): Promise<Page<FormSubmission>> =>
       list(t, path`/form-submissions`, params),
     /** Sends a form entry, as a site visitor would. */
-    create: (input: SubmitFormInput, options?: RequestOptions): Promise<unknown> =>
+    create: (input: SubmitFormInput, options?: RequestOptions): Promise<FormSubmissionReceipt> =>
       create(t, path`/form-submissions`, input, options),
   }
 }

@@ -22,7 +22,7 @@ export function blogAuthorsResource(t: Transport) {
     update: (id: string, input: UpdateBlogAuthorInput): Promise<BlogAuthor> =>
       update(t, path`/blog-authors/${id}`, input),
     /** Deletes an author profile. */
-    delete: (id: string): Promise<unknown> => remove(t, path`/blog-authors/${id}`),
+    delete: (id: string): Promise<void> => remove(t, path`/blog-authors/${id}`),
   }
 }
 

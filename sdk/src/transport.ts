@@ -211,7 +211,10 @@ export function update<T>(t: Transport, path: ApiPath, body: unknown): Promise<T
   return t.request<{ data: T }>({ method: 'PATCH', path, body }).then(unwrap)
 }
 
-/** DELETE a record. */
-export function remove(t: Transport, path: ApiPath, query?: object): Promise<unknown> {
-  return t.request<{ data: unknown }>({ method: 'DELETE', path, query }).then(unwrap)
+/** DELETE a record. The envelope is still checked; what it carries is not part of the contract. */
+export function remove(t: Transport, path: ApiPath, query?: object): Promise<void> {
+  return t
+    .request<{ data: unknown }>({ method: 'DELETE', path, query })
+    .then(unwrap)
+    .then(() => undefined)
 }

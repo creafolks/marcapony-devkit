@@ -68,3 +68,17 @@ export interface CreatePaymentLinkInput {
   sendEmail?: boolean
   discountCode?: string
 }
+
+/** What `paymentLinks.create` answers with; read the full link with `paymentLinks.get`. */
+export interface CreatedPaymentLink {
+  id: string
+  /** The short id in the payment URL. */
+  linkId: string
+  title: string
+  currency: string
+  status: PaymentLinkStatus
+  expiresAt: string | null
+  createdAt: string
+  /** The page where the customer pays; send this to them. */
+  paymentUrl: string
+}

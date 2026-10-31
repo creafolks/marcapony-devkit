@@ -29,7 +29,7 @@ export function blogCategoriesResource(t: Transport) {
       options?: RequestOptions,
     ): Promise<BlogCategory> => create(t, path`/blog-categories/${id}/translation`, input, options),
     /** Deletes a blog category. */
-    delete: (id: string): Promise<unknown> => remove(t, path`/blog-categories/${id}`),
+    delete: (id: string): Promise<void> => remove(t, path`/blog-categories/${id}`),
   }
 }
 

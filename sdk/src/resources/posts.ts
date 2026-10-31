@@ -27,7 +27,7 @@ export function postsResource(t: Transport) {
     /** Takes a post off the live site. */
     unpublish: (id: string): Promise<Post> => create(t, path`/posts/${id}/unpublish`),
     /** Deletes a post; `deleteTranslations: true` also deletes its translations. */
-    delete: (id: string, params?: { deleteTranslations?: boolean }): Promise<unknown> =>
+    delete: (id: string, params?: { deleteTranslations?: boolean }): Promise<void> =>
       remove(t, path`/posts/${id}`, params),
     /** The translation of a post in one locale. */
     getTranslation: (id: string, locale: string): Promise<Post> =>

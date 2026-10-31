@@ -64,3 +64,31 @@ export interface UpdateReservationStatusInput {
   status: 'approved' | 'rejected' | 'cancelled' | 'completed'
   rejectionReason?: string
 }
+
+/**
+ * What `reservations.create` answers with. A booking made through an app that
+ * is not account-wide answers with these fields only, so they are all an app
+ * can rely on; read the full record with `reservations.get` when the key may.
+ */
+export interface CreatedReservation {
+  id: string
+  status: ReservationStatus
+  /** YYYY-MM-DD */
+  requestedDate: string
+  /** HH:mm */
+  requestedTime: string
+  /** Minutes. */
+  duration: number | null
+  createdAt: string | null
+}
+
+/** What `reservations.updateStatus` answers with. */
+export interface ReservationStatusChange {
+  id: string
+  status: ReservationStatus
+  requestedDate: string
+  requestedTime: string
+  updatedAt: string
+  /** Present when the change released a paid deposit: refunded, or waiting for a manual refund. */
+  depositRefund?: 'refunded' | 'needs_refund'
+}

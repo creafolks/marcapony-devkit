@@ -38,3 +38,19 @@ describe('baseUrl', () => {
     expect(urls[0]).toBe('https://x.test/ext/v1/site')
   })
 })
+
+describe('deletes', () => {
+  it('resolve to undefined whatever the envelope carries, and still require one', async () => {
+    const bodies = [{ data: { deleted: true } }, { data: null }, { data: { field: 'post' } }]
+    const fetchImpl = (async (_url: string | URL | Request) => {
+      const body = bodies.shift()
+      return new Response(body ? JSON.stringify(body) : '', { status: 200 })
+    }) as typeof globalThis.fetch
+    const mp = createClient({ apiKey: 'mpk_x', baseUrl: 'https://x.test/ext/v1', fetch: fetchImpl })
+    expect(await mp.blogCategories.delete('c1')).toBeUndefined()
+    expect(await mp.blogAuthors.delete('a1')).toBeUndefined()
+    expect(await mp.posts.delete('p1')).toBeUndefined()
+    const err = await mp.posts.delete('p2').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ServerError)
+  })
+})

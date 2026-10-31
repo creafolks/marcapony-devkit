@@ -2,11 +2,13 @@ import { path } from '../path.js'
 import { create, get, list, update, type Transport } from '../transport.js'
 import type {
   AvailabilityBlock,
+  CreatedReservation,
   CreateReservationInput,
   ListParams,
   Page,
   RequestOptions,
   Reservation,
+  ReservationStatusChange,
   UpdateReservationStatusInput,
 } from '../types/index.js'
 
@@ -18,10 +20,10 @@ export function reservationsResource(t: Transport) {
     /** One reservation by id. */
     get: (id: string): Promise<Reservation> => get(t, path`/reservations/${id}`),
     /** Books a reservation for a customer (created from name and e-mail when new). */
-    create: (input: CreateReservationInput, options?: RequestOptions): Promise<unknown> =>
+    create: (input: CreateReservationInput, options?: RequestOptions): Promise<CreatedReservation> =>
       create(t, path`/reservations`, input, options),
     /** Approves, rejects, cancels or completes a reservation. */
-    updateStatus: (id: string, input: UpdateReservationStatusInput): Promise<unknown> =>
+    updateStatus: (id: string, input: UpdateReservationStatusInput): Promise<ReservationStatusChange> =>
       update(t, path`/reservations/${id}`, input),
   }
 }
