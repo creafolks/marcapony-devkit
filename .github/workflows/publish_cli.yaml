@@ -22,6 +22,10 @@ on:
   push:
     branches:
       - main
+    # Only the package's own directory. Root files (bun.lock, package.json,
+    # tsconfig.base.json, biome.json) deliberately do not trigger a publish:
+    # nothing ships until cli/package.json gets a new version, and that
+    # change lands under cli/ anyway. Use workflow_dispatch to force a run.
     paths:
       - 'cli/**'
 
@@ -72,10 +76,11 @@ jobs:
             echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
           fi
 
+      # The repository is a Bun workspace with one lockfile at the root, so
+      # install there; build, test and publish still run from cli/.
       - name: Install dependencies
         if: steps.decide.outputs.publish == 'true'
         run: bun install --frozen-lockfile
-        working-directory: cli
 
       - name: Type check + test + build
         if: steps.decide.outputs.publish == 'true'
