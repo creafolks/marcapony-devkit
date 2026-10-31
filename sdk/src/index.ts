@@ -1,3 +1,4 @@
+import { path, type ApiPath } from './path.js'
 import { createIdentityVerifier, IDENTITY_HEADER, type Identity } from './identity.js'
 import {
   errorFromResponse,
@@ -89,7 +90,7 @@ export interface RequestOptions {
 
 interface RequestArgs {
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
-  path: string
+  path: ApiPath
   query?: object
   body?: unknown
   idempotencyKey?: string
@@ -266,39 +267,31 @@ export interface ListBlogAuthorsFilters {
   isActive?: boolean
 }
 
-/** One path segment for a record id: encoded, and never `.`/`..` which a URL would resolve away. */
-function pathId(id: string): string {
-  if (!id || id === '.' || id === '..') {
-    throw new Error('marcapony-sdk: invalid record id')
-  }
-  return encodeURIComponent(id)
-}
-
 function meClient(t: Transport): MeClient {
   return {
     profile: {
       get: () =>
-        t.request<{ data: MeProfile }>({ method: 'GET', path: '/me/profile' }).then(unwrap),
+        t.request<{ data: MeProfile }>({ method: 'GET', path: path`/me/profile` }).then(unwrap),
     },
     reservations: {
       list: (params?: ListOwnReservationsParams) =>
         t.request<Page<OwnReservation>>({
           method: 'GET',
-          path: '/me/reservations',
+          path: path`/me/reservations`,
           query: params,
         }),
       get: (id: string) =>
         t
           .request<{ data: OwnReservation }>({
             method: 'GET',
-            path: `/me/reservations/${pathId(id)}`,
+            path: path`/me/reservations/${id}`,
           })
           .then(unwrap),
       create: (input: CreateOwnReservationInput, options?: RequestOptions) =>
         t
           .request<{ data: OwnReservation }>({
             method: 'POST',
-            path: '/me/reservations',
+            path: path`/me/reservations`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -307,31 +300,31 @@ function meClient(t: Transport): MeClient {
         t
           .request<{ data: { id: string; status: 'cancelled' } }>({
             method: 'PATCH',
-            path: `/me/reservations/${pathId(id)}`,
+            path: path`/me/reservations/${id}`,
             body: { status: 'cancelled' },
           })
           .then(unwrap),
     },
     orders: {
       list: (params?: ListParams) =>
-        t.request<Page<Order>>({ method: 'GET', path: '/me/orders', query: params }),
+        t.request<Page<Order>>({ method: 'GET', path: path`/me/orders`, query: params }),
       get: (id: string) =>
         t
-          .request<{ data: OrderWithItems }>({ method: 'GET', path: `/me/orders/${pathId(id)}` })
+          .request<{ data: OrderWithItems }>({ method: 'GET', path: path`/me/orders/${id}` })
           .then(unwrap),
     },
     paymentLinks: {
       list: (params?: ListParams & { status?: PaymentLinkStatus }) =>
         t.request<Page<OwnPaymentLink>>({
           method: 'GET',
-          path: '/me/payment-links',
+          path: path`/me/payment-links`,
           query: params,
         }),
       get: (id: string) =>
         t
           .request<{ data: OwnPaymentLink }>({
             method: 'GET',
-            path: `/me/payment-links/${pathId(id)}`,
+            path: path`/me/payment-links/${id}`,
           })
           .then(unwrap),
     },
@@ -339,7 +332,7 @@ function meClient(t: Transport): MeClient {
       list: (params?: ListParams) =>
         t.request<Page<OwnFormSubmission>>({
           method: 'GET',
-          path: '/me/form-submissions',
+          path: path`/me/form-submissions`,
           query: params,
         }),
     },
@@ -373,16 +366,16 @@ function memberClient(t: Transport): MemberClient {
   return {
     reservations: {
       list: (params?: ListParams) =>
-        t.request<Page<Reservation>>({ method: 'GET', path: '/reservations', query: params }),
+        t.request<Page<Reservation>>({ method: 'GET', path: path`/reservations`, query: params }),
       get: (id: string) =>
         t
-          .request<{ data: Reservation }>({ method: 'GET', path: `/reservations/${pathId(id)}` })
+          .request<{ data: Reservation }>({ method: 'GET', path: path`/reservations/${id}` })
           .then(unwrap),
       create: (input: CreateReservationInput, options?: RequestOptions) =>
         t
           .request<{ data: unknown }>({
             method: 'POST',
-            path: '/reservations',
+            path: path`/reservations`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -391,25 +384,25 @@ function memberClient(t: Transport): MemberClient {
         t
           .request<{ data: unknown }>({
             method: 'PATCH',
-            path: `/reservations/${pathId(id)}`,
+            path: path`/reservations/${id}`,
             body: input,
           })
           .then(unwrap),
     },
     orders: {
       list: (params?: ListParams) =>
-        t.request<Page<Order>>({ method: 'GET', path: '/orders', query: params }),
+        t.request<Page<Order>>({ method: 'GET', path: path`/orders`, query: params }),
       get: (id: string) =>
         t
-          .request<{ data: OrderWithItems }>({ method: 'GET', path: `/orders/${pathId(id)}` })
+          .request<{ data: OrderWithItems }>({ method: 'GET', path: path`/orders/${id}` })
           .then(unwrap),
     },
     customers: {
       list: (params?: ListParams & { q?: string }) =>
-        t.request<Page<Customer>>({ method: 'GET', path: '/customers', query: params }),
+        t.request<Page<Customer>>({ method: 'GET', path: path`/customers`, query: params }),
       get: (id: string) =>
         t
-          .request<{ data: Customer }>({ method: 'GET', path: `/customers/${pathId(id)}` })
+          .request<{ data: Customer }>({ method: 'GET', path: path`/customers/${id}` })
           .then(unwrap),
     },
   }
@@ -448,41 +441,41 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
       return { kind: unverifiedKind(token), me: meClient(scoped), ...memberClient(scoped) }
     },
     site: {
-      get: () => t.request<{ data: SiteInfo }>({ method: 'GET', path: '/site' }).then(unwrap),
+      get: () => t.request<{ data: SiteInfo }>({ method: 'GET', path: path`/site` }).then(unwrap),
     },
     regions: {
-      list: () => t.request<{ data: Country[] }>({ method: 'GET', path: '/regions' }).then(unwrap),
+      list: () => t.request<{ data: Country[] }>({ method: 'GET', path: path`/regions` }).then(unwrap),
     },
     products: {
       list: (params?: ListParams & { category?: string }) =>
-        t.request<Page<Product>>({ method: 'GET', path: '/products', query: params }),
+        t.request<Page<Product>>({ method: 'GET', path: path`/products`, query: params }),
       get: (id: string) =>
-        t.request<{ data: Product }>({ method: 'GET', path: `/products/${id}` }).then(unwrap),
+        t.request<{ data: Product }>({ method: 'GET', path: path`/products/${id}` }).then(unwrap),
     },
     categories: {
       list: () =>
-        t.request<{ data: Category[] }>({ method: 'GET', path: '/categories' }).then(unwrap),
+        t.request<{ data: Category[] }>({ method: 'GET', path: path`/categories` }).then(unwrap),
     },
     highlightedProducts: {
       list: (params?: ListParams) =>
         t
           .request<{ data: HighlightedProduct[] }>({
             method: 'GET',
-            path: '/highlighted-products',
+            path: path`/highlighted-products`,
             query: params,
           })
           .then(unwrap),
     },
     customers: {
       list: (params?: ListParams & { q?: string }) =>
-        t.request<Page<Customer>>({ method: 'GET', path: '/customers', query: params }),
+        t.request<Page<Customer>>({ method: 'GET', path: path`/customers`, query: params }),
       get: (id: string) =>
-        t.request<{ data: Customer }>({ method: 'GET', path: `/customers/${id}` }).then(unwrap),
+        t.request<{ data: Customer }>({ method: 'GET', path: path`/customers/${id}` }).then(unwrap),
       create: (input: CreateCustomerInput, options?: RequestOptions) =>
         t
           .request<{ data: Customer }>({
             method: 'POST',
-            path: '/customers',
+            path: path`/customers`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -490,16 +483,16 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     },
     reservations: {
       list: (params?: ListParams) =>
-        t.request<Page<Reservation>>({ method: 'GET', path: '/reservations', query: params }),
+        t.request<Page<Reservation>>({ method: 'GET', path: path`/reservations`, query: params }),
       get: (id: string) =>
         t
-          .request<{ data: Reservation }>({ method: 'GET', path: `/reservations/${id}` })
+          .request<{ data: Reservation }>({ method: 'GET', path: path`/reservations/${id}` })
           .then(unwrap),
       create: (input: CreateReservationInput, options?: RequestOptions) =>
         t
           .request<{ data: unknown }>({
             method: 'POST',
-            path: '/reservations',
+            path: path`/reservations`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -508,7 +501,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: unknown }>({
             method: 'PATCH',
-            path: `/reservations/${id}`,
+            path: path`/reservations/${id}`,
             body: input,
           })
           .then(unwrap),
@@ -516,19 +509,19 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     availabilityBlocks: {
       list: () =>
         t
-          .request<{ data: AvailabilityBlock[] }>({ method: 'GET', path: '/availability-blocks' })
+          .request<{ data: AvailabilityBlock[] }>({ method: 'GET', path: path`/availability-blocks` })
           .then(unwrap),
     },
     orders: {
       list: (params?: ListParams) =>
-        t.request<Page<Order>>({ method: 'GET', path: '/orders', query: params }),
+        t.request<Page<Order>>({ method: 'GET', path: path`/orders`, query: params }),
       get: (id: string) =>
-        t.request<{ data: OrderWithItems }>({ method: 'GET', path: `/orders/${id}` }).then(unwrap),
+        t.request<{ data: OrderWithItems }>({ method: 'GET', path: path`/orders/${id}` }).then(unwrap),
       create: (input: CreateOrderInput, options?: RequestOptions) =>
         t
           .request<{ data: unknown }>({
             method: 'POST',
-            path: '/orders',
+            path: path`/orders`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -536,16 +529,16 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     },
     paymentLinks: {
       list: (params?: ListParams) =>
-        t.request<Page<PaymentLink>>({ method: 'GET', path: '/payment-links', query: params }),
+        t.request<Page<PaymentLink>>({ method: 'GET', path: path`/payment-links`, query: params }),
       get: (id: string) =>
         t
-          .request<{ data: PaymentLink }>({ method: 'GET', path: `/payment-links/${id}` })
+          .request<{ data: PaymentLink }>({ method: 'GET', path: path`/payment-links/${id}` })
           .then(unwrap),
       create: (input: CreatePaymentLinkInput, options?: RequestOptions) =>
         t
           .request<{ data: unknown }>({
             method: 'POST',
-            path: '/payment-links',
+            path: path`/payment-links`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -553,20 +546,20 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     },
     discounts: {
       list: (params?: ListParams) =>
-        t.request<Page<Discount>>({ method: 'GET', path: '/discounts', query: params }),
+        t.request<Page<Discount>>({ method: 'GET', path: path`/discounts`, query: params }),
     },
     formSubmissions: {
       list: (params?: ListParams) =>
         t.request<Page<FormSubmission>>({
           method: 'GET',
-          path: '/form-submissions',
+          path: path`/form-submissions`,
           query: params,
         }),
       create: (input: SubmitFormInput, options?: RequestOptions) =>
         t
           .request<{ data: unknown }>({
             method: 'POST',
-            path: '/form-submissions',
+            path: path`/form-submissions`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -574,33 +567,33 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     },
     posts: {
       list: (params?: ListParams & ListPostsFilters) =>
-        t.request<Page<Post>>({ method: 'GET', path: '/posts', query: params }),
+        t.request<Page<Post>>({ method: 'GET', path: path`/posts`, query: params }),
       get: (id: string) =>
-        t.request<{ data: Post }>({ method: 'GET', path: `/posts/${id}` }).then(unwrap),
+        t.request<{ data: Post }>({ method: 'GET', path: path`/posts/${id}` }).then(unwrap),
       create: (input: CreatePostInput, options?: RequestOptions) =>
         t
           .request<{ data: Post }>({
             method: 'POST',
-            path: '/posts',
+            path: path`/posts`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
           .then(unwrap),
       update: (id: string, input: UpdatePostInput) =>
         t
-          .request<{ data: Post }>({ method: 'PATCH', path: `/posts/${id}`, body: input })
+          .request<{ data: Post }>({ method: 'PATCH', path: path`/posts/${id}`, body: input })
           .then(unwrap),
       publish: (id: string) =>
-        t.request<{ data: Post }>({ method: 'POST', path: `/posts/${id}/publish` }).then(unwrap),
+        t.request<{ data: Post }>({ method: 'POST', path: path`/posts/${id}/publish` }).then(unwrap),
       unpublish: (id: string) =>
-        t.request<{ data: Post }>({ method: 'POST', path: `/posts/${id}/unpublish` }).then(unwrap),
+        t.request<{ data: Post }>({ method: 'POST', path: path`/posts/${id}/unpublish` }).then(unwrap),
       delete: (id: string, params?: { deleteTranslations?: boolean }) =>
         t
-          .request<{ data: unknown }>({ method: 'DELETE', path: `/posts/${id}`, query: params })
+          .request<{ data: unknown }>({ method: 'DELETE', path: path`/posts/${id}`, query: params })
           .then(unwrap),
       getTranslation: (id: string, locale: string) =>
         t
-          .request<{ data: Post }>({ method: 'GET', path: `/posts/${id}/translations/${locale}` })
+          .request<{ data: Post }>({ method: 'GET', path: path`/posts/${id}/translations/${locale}` })
           .then(unwrap),
       createTranslation: (
         id: string,
@@ -610,7 +603,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: Post }>({
             method: 'POST',
-            path: `/posts/${id}/translations`,
+            path: path`/posts/${id}/translations`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -619,17 +612,17 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     blogAuthors: {
       list: (params?: ListBlogAuthorsFilters) =>
         t
-          .request<{ data: BlogAuthor[] }>({ method: 'GET', path: '/blog-authors', query: params })
+          .request<{ data: BlogAuthor[] }>({ method: 'GET', path: path`/blog-authors`, query: params })
           .then(unwrap),
       get: (id: string) =>
         t
-          .request<{ data: BlogAuthor }>({ method: 'GET', path: `/blog-authors/${id}` })
+          .request<{ data: BlogAuthor }>({ method: 'GET', path: path`/blog-authors/${id}` })
           .then(unwrap),
       create: (input: CreateBlogAuthorInput, options?: RequestOptions) =>
         t
           .request<{ data: BlogAuthor }>({
             method: 'POST',
-            path: '/blog-authors',
+            path: path`/blog-authors`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -638,13 +631,13 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: BlogAuthor }>({
             method: 'PATCH',
-            path: `/blog-authors/${id}`,
+            path: path`/blog-authors/${id}`,
             body: input,
           })
           .then(unwrap),
       delete: (id: string) =>
         t
-          .request<{ data: unknown }>({ method: 'DELETE', path: `/blog-authors/${id}` })
+          .request<{ data: unknown }>({ method: 'DELETE', path: path`/blog-authors/${id}` })
           .then(unwrap),
     },
     blogCategories: {
@@ -652,7 +645,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: BlogCategory[] }>({
             method: 'GET',
-            path: '/blog-categories',
+            path: path`/blog-categories`,
             query: params,
           })
           .then(unwrap),
@@ -660,7 +653,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: BlogCategory }>({
             method: 'GET',
-            path: `/blog-categories/${id}`,
+            path: path`/blog-categories/${id}`,
             query: params,
           })
           .then(unwrap),
@@ -668,7 +661,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: BlogCategory }>({
             method: 'POST',
-            path: '/blog-categories',
+            path: path`/blog-categories`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
@@ -677,7 +670,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: BlogCategory }>({
             method: 'PATCH',
-            path: `/blog-categories/${id}`,
+            path: path`/blog-categories/${id}`,
             body: input,
           })
           .then(unwrap),
@@ -689,26 +682,26 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         t
           .request<{ data: BlogCategory }>({
             method: 'POST',
-            path: `/blog-categories/${id}/translation`,
+            path: path`/blog-categories/${id}/translation`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
           .then(unwrap),
       delete: (id: string) =>
         t
-          .request<{ data: unknown }>({ method: 'DELETE', path: `/blog-categories/${id}` })
+          .request<{ data: unknown }>({ method: 'DELETE', path: path`/blog-categories/${id}` })
           .then(unwrap),
     },
     media: {
       list: (params?: ListParams & { q?: string; fileType?: AssetFileType }) =>
-        t.request<Page<Asset>>({ method: 'GET', path: '/media', query: params }),
+        t.request<Page<Asset>>({ method: 'GET', path: path`/media`, query: params }),
       get: (id: string) =>
-        t.request<{ data: Asset }>({ method: 'GET', path: `/media/${id}` }).then(unwrap),
+        t.request<{ data: Asset }>({ method: 'GET', path: path`/media/${id}` }).then(unwrap),
       upload: (input: ImportAssetInput, options?: RequestOptions) =>
         t
           .request<{ data: Asset }>({
             method: 'POST',
-            path: '/media',
+            path: path`/media`,
             body: input,
             idempotencyKey: options?.idempotencyKey,
           })
