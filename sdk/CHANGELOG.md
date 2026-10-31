@@ -4,6 +4,13 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.7.1] - 2026-10-31
+
+### Changed
+
+- Source formatted with Biome and built from a shared compiler config. No
+  change to behaviour or types.
+
 ## [0.7.0] - 2026-10-31
 
 ### Changed
