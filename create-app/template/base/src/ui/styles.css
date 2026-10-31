@@ -1,0 +1,115 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  --border: #d4d4d8;
+  --muted: #52525b;
+  --notice: #fef3c7;
+  --notice-text: #78350f;
+  --error: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --border: #3f3f46;
+    --muted: #a1a1aa;
+    --notice: #422006;
+    --notice-text: #fde68a;
+    --error: #fca5a5;
+  }
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+h2 {
+  font-size: 1.125rem;
+  margin-top: 2rem;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+ul {
+  padding-left: 1.25rem;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+label > input,
+label > select,
+label > textarea {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+.notice {
+  background: var(--notice);
+  color: var(--notice-text);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.25rem;
+}
+
+.rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.rows > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

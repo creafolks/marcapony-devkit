@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
+import { errorResponse, marcaponyFromEnv, type MarcaponyBindings } from './marcapony'
 
 /**
  * The app's server. Only `/api/*` reaches this worker — everything else is
@@ -33,9 +33,6 @@ app.get('/api/products', async (c) => {
  * })
  */
 
-app.onError((err, c) => {
-  console.error(err)
-  return c.json({ error: err instanceof Error ? err.message : 'Unexpected error' }, 500)
-})
+app.onError((err) => errorResponse(err))
 
 export default app

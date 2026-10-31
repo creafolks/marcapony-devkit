@@ -50,6 +50,13 @@ jobs:
         run: bun test
         working-directory: ${{ matrix.pkg }}
 
+      # Scaffolds every template and runs tsc plus the worker bundle against
+      # the SDK built from this checkout, so a template cannot drift from it.
+      - name: Check templates
+        if: matrix.pkg == 'create-app'
+        run: bun run check:templates
+        working-directory: create-app
+
   version-gate:
     # npm refuses to re-publish an existing version, so shipping package code
     # without bumping its package.json means the change silently never reaches

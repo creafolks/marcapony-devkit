@@ -8,6 +8,7 @@ import {
   parseArgs,
   run,
   sanitizePackageName,
+  scaffoldTemplate,
   templateRoot,
   templateTargetName,
 } from '../index'
@@ -73,6 +74,23 @@ describe('parseArgs', () => {
   it('ignores a second positional rather than misreading it as the directory', () => {
     expect(parseArgs(['first', 'second']).dir).toBe('first')
   })
+
+  it('reads --template in both spellings without taking its value as the directory', () => {
+    expect(parseArgs(['--template', 'shop', 'my-app'])).toEqual({
+      dir: 'my-app',
+      template: 'shop',
+      force: false,
+      help: false,
+    })
+    expect(parseArgs(['my-app', '--template=booking']).template).toBe('booking')
+    expect(parseArgs(['my-app', '-t', 'team-tool']).template).toBe('team-tool')
+  })
+
+  it('marks a --template without a value so run can refuse it', () => {
+    expect(parseArgs(['my-app', '--template']).template).toBe('')
+    expect(parseArgs(['--template', '--force']).template).toBe('')
+    expect(parseArgs(['--template', '--force']).force).toBe(true)
+  })
 })
 
 describe('templateRoot', () => {
@@ -87,7 +105,7 @@ describe('templateRoot', () => {
 describe('copyTemplate', () => {
   it('copies the real template and restores the underscore-prefixed files', () => {
     const target = join(tempDir(), 'app')
-    copyTemplate(templateRoot(MODULE_URL), target)
+    scaffoldTemplate(templateRoot(MODULE_URL), 'blank', target)
 
     expect(existsSync(join(target, 'package.json'))).toBe(true)
     expect(existsSync(join(target, '.gitignore'))).toBe(true)
@@ -99,13 +117,13 @@ describe('copyTemplate', () => {
 
   it('ships a .gitignore that already covers the key file', () => {
     const target = join(tempDir(), 'app')
-    copyTemplate(templateRoot(MODULE_URL), target)
+    scaffoldTemplate(templateRoot(MODULE_URL), 'blank', target)
     expect(readFileSync(join(target, '.gitignore'), 'utf8')).toContain('.dev.vars')
   })
 
   it('points the template at the published SDK, not a private one', () => {
     const target = join(tempDir(), 'app')
-    copyTemplate(templateRoot(MODULE_URL), target)
+    scaffoldTemplate(templateRoot(MODULE_URL), 'blank', target)
     const manifest = readFileSync(join(target, 'package.json'), 'utf8')
     expect(manifest).toContain('"marcapony-sdk"')
     expect(manifest).not.toContain('@creafolks/')
@@ -113,7 +131,7 @@ describe('copyTemplate', () => {
 
   it('declares no storage bindings — deployed apps are stateless', () => {
     const target = join(tempDir(), 'app')
-    copyTemplate(templateRoot(MODULE_URL), target)
+    scaffoldTemplate(templateRoot(MODULE_URL), 'blank', target)
     const config = JSON.parse(readFileSync(join(target, 'marcapony.json'), 'utf8')) as Record<
       string,
       unknown
@@ -125,7 +143,7 @@ describe('copyTemplate', () => {
 
   it('ships no wrangler config or dependency', () => {
     const target = join(tempDir(), 'app')
-    copyTemplate(templateRoot(MODULE_URL), target)
+    scaffoldTemplate(templateRoot(MODULE_URL), 'blank', target)
     expect(existsSync(join(target, 'wrangler.jsonc'))).toBe(false)
     expect(existsSync(join(target, 'wrangler.json'))).toBe(false)
     expect(existsSync(join(target, 'wrangler.toml'))).toBe(false)
@@ -220,7 +238,7 @@ describe('commands shown to the user', () => {
   it('uses the pinned CLI scripts everywhere', async () => {
     const { HELP, nextSteps } = await import('../index')
     const target = join(tempDir(), 'app')
-    copyTemplate(templateRoot(MODULE_URL), target)
+    scaffoldTemplate(templateRoot(MODULE_URL), 'blank', target)
     const texts = [
       HELP,
       nextSteps('app'),

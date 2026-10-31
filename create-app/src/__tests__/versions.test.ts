@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
  * old release. These tests fail as soon as the template falls behind.
  */
 
-const TEMPLATE_MANIFEST = new URL('../../template/_package.json', import.meta.url)
+const TEMPLATE_MANIFEST = new URL('../../template/base/_package.json', import.meta.url)
 
 function readJson<T>(url: URL): T {
   return JSON.parse(readFileSync(url, 'utf8')) as T
