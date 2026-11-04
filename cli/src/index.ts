@@ -15,13 +15,13 @@ export * from './agents.js'
 
 // Kept in step with cli/package.json by a test — `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.4.3'
+const VERSION = '0.5.0'
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
 Usage
   marcapony app link [--code <code>] [--cwd <dir>]
-  marcapony app deploy [--cwd <dir>] [--message <text>]
+  marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source]
   marcapony guide [--cwd <dir>]
 
 Commands
@@ -30,7 +30,9 @@ Commands
                from the app's page in your Marcapony dashboard.
   app deploy   Run the project's build, upload the bundle, and wait until it is
                live. The target environment comes from the key — there is no
-               --env flag.
+               --env flag. The project source is saved with each deploy;
+               --no-source skips that for one run, and
+               MARCAPONY_SOURCE_PUSH=0 skips it every time.
   guide        Print the AI-readable setup guide for this project (the same
                content written to AGENTS.md), listing the SDK calls and schemas
                your app key can use.
@@ -38,6 +40,8 @@ Commands
 Options
   --code <code>     Pairing code (link only; prompted when omitted)
   --cwd <dir>       Project directory (defaults to the current directory)
+  --message <text>  Version message saved with the source (deploy only)
+  --no-source       Do not save the project source with this deploy
   -h, --help        Show this help
   -v, --version     Show the CLI version
 `
@@ -46,6 +50,9 @@ export interface ParsedArgs {
   command: string[]
   flags: Record<string, string | boolean>
 }
+
+// Flags that never take a value, so the word after them stays a command or flag.
+const BOOLEAN_FLAGS = new Set(['help', 'h', 'version', 'v', 'no-source'])
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const command: string[] = []
@@ -59,7 +66,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
     const name = arg.replace(/^--?/, '')
     const next = argv[i + 1]
-    if (next !== undefined && !next.startsWith('-')) {
+    if (!BOOLEAN_FLAGS.has(name) && next !== undefined && !next.startsWith('-')) {
       flags[name] = next
       i++
     } else {
@@ -104,7 +111,13 @@ export async function main(argv: string[]): Promise<number> {
       return 0
     }
     if (namespace === 'app' && action === 'deploy') {
-      await runDeploy({ cwd, cliEnv, env: process.env, message: stringFlag(flags, 'message') })
+      await runDeploy({
+        cwd,
+        cliEnv,
+        env: process.env,
+        message: stringFlag(flags, 'message'),
+        source: flags['no-source'] !== true,
+      })
       return 0
     }
     console.error(`Unknown command: ${command.join(' ')}\n`)

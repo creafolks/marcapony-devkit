@@ -67,6 +67,12 @@ describe('parseArgs', () => {
     expect(flags['cli-env']).toBe('staging')
     expect(flags.help).toBe(true)
   })
+
+  it('never lets --no-source swallow the word after it', () => {
+    const { command, flags } = parseArgs(['--no-source', 'app', 'deploy'])
+    expect(command).toEqual(['app', 'deploy'])
+    expect(flags['no-source']).toBe(true)
+  })
 })
 
 describe('--version', () => {
@@ -406,6 +412,7 @@ describe('runDeploy', () => {
       cwd: dir,
       cliEnv: 'local',
       env: {},
+      source: false,
       fetchImpl,
       runBuild: (cmd) => built.push(cmd),
       log: () => {},
@@ -444,6 +451,7 @@ describe('runDeploy', () => {
       cwd: dir,
       cliEnv: 'local',
       env: {},
+      source: false,
       fetchImpl: first.fetch,
       runBuild: () => {},
       log: () => {},
@@ -462,6 +470,7 @@ describe('runDeploy', () => {
       cwd: dir,
       cliEnv: 'local',
       env: {},
+      source: false,
       fetchImpl: second.fetch,
       runBuild: () => {},
       log: () => {},
@@ -488,6 +497,7 @@ describe('runDeploy', () => {
       cwd: dir,
       cliEnv: 'local',
       env: {},
+      source: false,
       fetchImpl,
       runBuild: () => {},
       sleep: async () => {},
@@ -519,6 +529,7 @@ describe('runDeploy', () => {
         cwd: dir,
         cliEnv: 'local',
         env: {},
+        source: false,
         fetchImpl,
         runBuild: () => {},
         log: () => {},
@@ -593,7 +604,7 @@ describe('upsertAgentsBlock', () => {
   })
 })
 
-describe('source push (spike)', () => {
+describe('source push', () => {
   function scaffold(): void {
     mkdirSync(join(dir, 'dist', 'client'), { recursive: true })
     mkdirSync(join(dir, 'src'), { recursive: true })
@@ -649,28 +660,85 @@ describe('source push (spike)', () => {
     expect(findings).toEqual([{ path: 'src/leak.ts', line: 1, rule: 'Marcapony API key' }])
   })
 
-  it('does nothing extra unless MARCAPONY_SOURCE_PUSH=1', async () => {
+  it('pushes the source by default and reports the short commit', async () => {
     scaffold()
-    const { fetch: fetchImpl, calls } = makeFetch([live()])
+    const { fetch: fetchImpl, calls } = makeFetch([jsonResponse({ data: GRANT }, 201), live()])
+    const logs: string[] = []
     await runDeploy({
       cwd: dir,
       cliEnv: 'local',
       env: {},
       fetchImpl,
       runBuild: () => {},
-      log: () => {},
+      log: (m) => logs.push(m),
+      pushSourceImpl: async () => '1234567abcdef'.padEnd(40, '0'),
     })
-    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toContain('/ext/v1/deployments/source-token')
+    expect(calls).toHaveLength(2)
+    expect(logs).toContain('Source saved: commit 1234567 (4 file(s))')
   })
 
-  it('pushes the source with the granted token when enabled', async () => {
+  it('skips the push with --no-source and says so', async () => {
+    scaffold()
+    const { fetch: fetchImpl, calls } = makeFetch([live()])
+    const logs: string[] = []
+    await runDeploy({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      source: false,
+      fetchImpl,
+      runBuild: () => {},
+      log: (m) => logs.push(m),
+    })
+    expect(calls).toHaveLength(1)
+    expect(JSON.parse(String(calls[0]?.init.body))).not.toHaveProperty('source')
+    expect(logs).toContain('Source not saved: turned off with --no-source')
+  })
+
+  it('skips the push when MARCAPONY_SOURCE_PUSH=0', async () => {
+    scaffold()
+    const { fetch: fetchImpl, calls } = makeFetch([live()])
+    const logs: string[] = []
+    await runDeploy({
+      cwd: dir,
+      cliEnv: 'local',
+      env: { MARCAPONY_SOURCE_PUSH: '0' },
+      fetchImpl,
+      runBuild: () => {},
+      log: (m) => logs.push(m),
+    })
+    expect(calls).toHaveLength(1)
+    expect(logs).toContain('Source not saved: turned off by MARCAPONY_SOURCE_PUSH')
+  })
+
+  it('passes --no-source from the command line to the deploy', async () => {
+    scaffold()
+    const { fetch: fetchImpl, calls } = makeFetch([live()])
+    const realFetch = globalThis.fetch
+    const log = console.log
+    globalThis.fetch = fetchImpl
+    console.log = (): void => {}
+    try {
+      expect(await main(['app', 'deploy', '--no-source', '--cwd', dir, '--cli-env', 'local'])).toBe(
+        0,
+      )
+    } finally {
+      globalThis.fetch = realFetch
+      console.log = log
+    }
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe('http://localhost:4000/ext/v1/deployments')
+  })
+
+  it('pushes the source with the granted token', async () => {
     scaffold()
     const { fetch: fetchImpl, calls } = makeFetch([jsonResponse({ data: GRANT }, 201), live()])
     const pushed: Array<{ files: string[]; branch: string }> = []
     await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      env: {},
       fetchImpl,
       runBuild: () => {},
       log: () => {},
@@ -692,7 +760,7 @@ describe('source push (spike)', () => {
     await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      env: {},
       message: '  Add the booking form  ',
       fetchImpl,
       runBuild: () => {},
@@ -704,13 +772,13 @@ describe('source push (spike)', () => {
     expect(body.source?.sizeBytes).toBeGreaterThan(0)
   })
 
-  it('sends no source when the push fails or is disabled', async () => {
+  it('sends no source when the push fails or is turned off', async () => {
     scaffold()
     const failed = makeFetch([jsonResponse({ data: GRANT }, 201), live()])
     await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      env: {},
       fetchImpl: failed.fetch,
       runBuild: () => {},
       log: () => {},
@@ -724,7 +792,7 @@ describe('source push (spike)', () => {
     await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: {},
+      env: { MARCAPONY_SOURCE_PUSH: '0' },
       fetchImpl: disabled.fetch,
       runBuild: () => {},
       log: () => {},
@@ -751,7 +819,7 @@ describe('source push (spike)', () => {
     await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      env: {},
       fetchImpl,
       runBuild: () => {},
       log: (m) => logs.push(m),
@@ -772,7 +840,7 @@ describe('source push (spike)', () => {
     const result = await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      env: {},
       fetchImpl,
       runBuild: () => {},
       log: (m) => logs.push(m),
@@ -791,13 +859,14 @@ describe('source push (spike)', () => {
       live(),
     ])
     let called = false
+    const logs: string[] = []
     const result = await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      env: {},
       fetchImpl,
       runBuild: () => {},
-      log: () => {},
+      log: (m) => logs.push(m),
       pushSourceImpl: async () => {
         called = true
         return 'oid'
@@ -805,6 +874,8 @@ describe('source push (spike)', () => {
     })
     expect(result.status).toBe('live')
     expect(called).toBe(false)
+    expect(logs).toContain('Source not saved: this environment does not store source yet')
+    expect(logs.some((m) => m.startsWith('Warning'))).toBe(false)
   })
 
   it('skips the push and warns when the secret scan finds a key', async () => {
@@ -815,7 +886,7 @@ describe('source push (spike)', () => {
     await runDeploy({
       cwd: dir,
       cliEnv: 'local',
-      env: { MARCAPONY_SOURCE_PUSH: '1' },
+      env: {},
       fetchImpl,
       runBuild: () => {},
       log: (m) => logs.push(m),

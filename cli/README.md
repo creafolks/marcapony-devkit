@@ -63,6 +63,26 @@ the wait prints its deployment id so you can check it later.
 There is no `--env` flag: the target environment is derived from the key, so
 deploying with the test key targets the test environment.
 
+### Saving the source
+
+Each deploy also saves the project source to Marcapony, so every version keeps
+the code it was built from. The CLI prints one line about it:
+
+```
+Source saved: commit 1a2b3c4 (12 file(s))
+```
+
+or `Source not saved:` with the reason. Saving the source never stops a deploy:
+if it fails, the deploy still goes live.
+
+- Files ignored by `.gitignore` or `.marcaponyignore`, `node_modules`, the build
+  output and credential files (`.dev.vars`, `.env`, keys) are never sent.
+- If a scan finds something that looks like a secret key, the source is not
+  saved and the CLI names the file and line (never the value).
+- `--message <text>` stores a version message with the saved source.
+- `--no-source` skips saving for one deploy. Set `MARCAPONY_SOURCE_PUSH=0` to
+  skip it every time.
+
 ## Configuration reference
 
 | Field                | Required | Meaning                                                                      |
@@ -85,10 +105,12 @@ supplied key already reaches.
 
 ## Options
 
-| Flag            | Meaning                                               |
-| --------------- | ----------------------------------------------------- |
-| `--code <code>` | Pairing code (link only; prompted when omitted)       |
-| `--cwd <dir>`   | Project directory (defaults to the current directory) |
+| Flag               | Meaning                                               |
+| ------------------ | ----------------------------------------------------- |
+| `--code <code>`    | Pairing code (link only; prompted when omitted)       |
+| `--cwd <dir>`      | Project directory (defaults to the current directory) |
+| `--message <text>` | Version message saved with the source (deploy only)   |
+| `--no-source`      | Do not save the project source with this deploy       |
 
 Requires Node 20+ or Bun.
 
