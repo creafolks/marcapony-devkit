@@ -74,6 +74,14 @@ function makeFetch(
   return { fetch: impl, calls, syncCalls }
 }
 
+/** A version 1 manifest, as projects linked before version 2 have. */
+const V1 = {
+  app: 'transfer-app',
+  build: 'echo build',
+  worker: 'dist/index.js',
+  assets: 'dist/client',
+}
+
 let dir: string
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'marcapony-cli-'))
@@ -198,7 +206,7 @@ describe('assets ignore', () => {
 })
 
 describe('runLink', () => {
-  it('writes the key into .dev.vars and creates marcapony.json', async () => {
+  it('keeps an existing .dev.vars and creates a version 2 marcapony.json', async () => {
     writeFileSync(join(dir, '.dev.vars'), 'EXISTING=1\n')
     const { fetch: fetchImpl, calls } = makeFetch([
       jsonResponse({
@@ -231,7 +239,10 @@ describe('runLink', () => {
     const config = JSON.parse(readFileSync(join(dir, 'marcapony.json'), 'utf8'))
     expect(config.app).toBe('transfer-app')
     expect(config.build).toBe('bun run build')
-    expect(config.worker).toBe('dist/index.js')
+    expect(config.manifest).toBe(2)
+    expect(config.server).toBe('dist/server/index.js')
+    expect(config.runtime).toBe('2026-10')
+    expect(config.worker).toBeUndefined()
 
     // AGENTS.md is written with the app's scope-filtered operations.
     const agents = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
@@ -282,7 +293,7 @@ describe('runLink', () => {
   // .dev.vars holds a live key with the app's data scopes plus apps:deploy;
   // linking inside a project that never ignored it would publish the tenant's
   // credential on the next commit.
-  it('ignores .dev.vars before writing the key', async () => {
+  it('writes the key into .env.local and ignores it first', async () => {
     const { fetch: fetchImpl } = makeFetch([
       jsonResponse({
         appSlug: 'transfer-app',
@@ -302,7 +313,11 @@ describe('runLink', () => {
       log: () => {},
     })
 
-    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toContain('.dev.vars')
+    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toContain('.env.local')
+    expect(parseEnvLines(readFileSync(join(dir, '.env.local'), 'utf8')).MARCAPONY_API_KEY).toBe(
+      'mpk_secret',
+    )
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf8')).toContain('`.env.local`')
   })
 
   it('does not duplicate an existing .dev.vars ignore entry', async () => {
@@ -351,7 +366,7 @@ describe('runLink', () => {
     })
 
     // The key + config still landed; AGENTS.md is simply skipped.
-    expect(parseEnvLines(readFileSync(join(dir, '.dev.vars'), 'utf8')).MARCAPONY_API_KEY).toBe(
+    expect(parseEnvLines(readFileSync(join(dir, '.env.local'), 'utf8')).MARCAPONY_API_KEY).toBe(
       'mpk_secret',
     )
     expect(existsSync(join(dir, 'AGENTS.md'))).toBe(false)
@@ -665,14 +680,14 @@ describe('source push', () => {
 
   it('collects source honouring built-in excludes, build outputs and .gitignore', () => {
     scaffold()
-    const files = collectSourceFiles(dir, { worker: 'dist/index.js', assets: 'dist/client' })
+    const files = collectSourceFiles(dir, V1)
     expect(files).toEqual(['.gitignore', 'marcapony.json', 'package.json', 'src/app.ts'])
   })
 
   it('stops at the file and size caps', () => {
     scaffold()
     writeFileSync(join(dir, 'huge.bin'), Buffer.alloc(MAX_SOURCE_BYTES + 1))
-    expect(() => collectSourceFiles(dir, { worker: 'dist/index.js' })).toThrow(SourceTooLargeError)
+    expect(() => collectSourceFiles(dir, { ...V1, assets: undefined })).toThrow(SourceTooLargeError)
   })
 
   it('finds known key formats without returning the value', () => {
@@ -827,7 +842,7 @@ describe('source push', () => {
     for (const name of ['.dev.vars.production', '.npmrc', '.netrc', 'id_ed25519', 'cert.p12']) {
       writeFileSync(join(dir, name), 'secret')
     }
-    const files = collectSourceFiles(dir, { worker: 'dist/index.js', assets: 'dist/client' })
+    const files = collectSourceFiles(dir, V1)
     expect(files).toEqual(['.gitignore', 'marcapony.json', 'package.json', 'src/app.ts'])
   })
 

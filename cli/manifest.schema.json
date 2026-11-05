@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "marcapony.json",
+  "description": "What a Marcapony app needs. The platform turns it into the runtime settings.",
+  "type": "object",
+  "required": ["manifest", "build"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "manifest": { "const": 2, "description": "The format version." },
+    "app": { "type": "string", "description": "The app slug. Written by `marcapony app link`." },
+    "build": { "type": "string", "description": "The build command, run before every deploy." },
+    "server": {
+      "type": "string",
+      "default": "dist/server/index.js",
+      "description": "The built server module. It default-exports { fetch(request, env, ctx) }."
+    },
+    "public": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir": { "type": "string", "default": "dist/client", "description": "The built public files." },
+        "ignore": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files in the public directory that are never uploaded."
+        }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "server": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^/" },
+          "description": "Paths that always reach the server before the public files, such as /api/*."
+        },
+        "notFound": {
+          "enum": ["spa", "page", "none"],
+          "description": "spa serves index.html, page serves 404.html, none answers 404."
+        }
+      }
+    },
+    "runtime": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}$",
+      "description": "The Marcapony runtime version. Without it, the oldest supported version is used."
+    },
+    "ignore": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Files never saved with the source, in .gitignore syntax. Applied after .gitignore; ! re-includes."
+    },
+    "env": {
+      "type": "object",
+      "description": "Settings and secrets the app needs, set per environment with `marcapony app env set`.",
+      "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]{0,63}$" },
+      "maxProperties": 50,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "secret": { "type": "boolean" },
+          "required": { "type": "boolean" },
+          "description": { "type": "string", "maxLength": 300 }
+        }
+      }
+    },
+    "placement": { "enum": ["portal", "public"] },
+    "dataAccess": { "enum": ["account", "visitor", "customer", "team"] },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "grants": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "portal": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "icon": { "type": "string" },
+        "sortOrder": { "type": "number" }
+      }
+    }
+  }
+}

@@ -1,5 +1,7 @@
 node_modules
 dist
 
-# Holds a live Marcapony app key — `marcapony app link` writes it here.
+# Holds a live Marcapony app key; `bun run link` writes it here.
+.env.local
+# Where projects linked before marcapony.json version 2 keep it.
 .dev.vars

@@ -80,8 +80,9 @@ Source saved: commit 1a2b3c4 (12 file(s))
 or `Source not saved:` with the reason. Saving the source never stops a deploy:
 if it fails, the deploy still goes live.
 
-- Files ignored by `.gitignore` or `.marcaponyignore`, `node_modules`, the build
-  output and credential files (`.dev.vars`, `.env`, keys) are never sent.
+- Files ignored by `.gitignore` or `ignore` in `marcapony.json`, `node_modules`,
+  the build output and credential files (`.env.local`, `.dev.vars`, keys) are
+  never sent.
 - If a scan finds something that looks like a secret key, the source is not
   saved and the CLI names the file and line (never the value).
 - `--message <text>` stores a version message with the saved source.
@@ -153,19 +154,41 @@ to stderr). Commands never wait for input without a terminal. Exit codes:
 
 ## Configuration reference
 
-| Field                | Required | Meaning                                                                      |
-| -------------------- | -------- | ---------------------------------------------------------------------------- |
-| `app`                | yes      | App slug issued by the platform                                              |
-| `build`              | yes      | Build command run before bundling                                            |
-| `worker`             | yes      | Path to the built backend entry (an ES module)                               |
-| `assets`             | no       | Directory of static assets to serve                                          |
-| `assetsConfig`       | no       | Static-asset behaviour (e.g. single-page-app fallback)                       |
-| `compatibilityDate`  | no       | Runtime compatibility date                                                   |
-| `compatibilityFlags` | no       | Runtime compatibility flags                                                  |
-| `placement`          | no       | `portal` (behind the customer portal login) or `public`                      |
-| `dataAccess`         | no       | Whose data the app works with: `account`, `visitor`, `customer` or `team`    |
-| `permissions`        | no       | Permissions the app offers (`id`, `label`, `grants`); the owner assigns them |
-| `portal`             | no       | Portal menu entry: `title`, `icon`, `sortOrder`                              |
+`marcapony.json` says what the app needs; Marcapony turns it into the runtime
+settings. `npx marcapony app link` writes it for a new project, and
+`npx marcapony app migrate-config` moves an older file to this format.
+
+| Field                | Required | Meaning                                                                         |
+| -------------------- | -------- | ------------------------------------------------------------------------------- |
+| `manifest`           | yes      | The format version, `2`                                                         |
+| `app`                | yes      | App slug issued by the platform (written by `link`)                             |
+| `build`              | yes      | Build command run before every deploy                                           |
+| `server`             | no       | The built server module (default `dist/server/index.js`), exporting `{ fetch }` |
+| `public.dir`         | no       | The built public files (default `dist/client`, when it exists)                  |
+| `public.ignore`      | no       | Files in the public directory that are never uploaded                           |
+| `routes.server`      | no       | Paths that always reach the server first, such as `/api/*`                      |
+| `routes.notFound`    | no       | `spa` (serve `index.html`), `page` (serve `404.html`) or `none`                 |
+| `runtime`            | no       | The Marcapony runtime version, such as `2026-10` (default: the oldest)          |
+| `ignore`             | no       | Files never saved with the source, in `.gitignore` syntax; `!` re-includes      |
+| `env`                | no       | Settings and secrets the app needs: `{ "NAME": { "secret", "required", "description" } }` |
+| `placement`          | no       | `portal` (behind the customer portal login) or `public`                         |
+| `dataAccess`         | no       | Whose data the app works with: `account`, `visitor`, `customer` or `team`       |
+| `permissions`        | no       | Permissions the app offers (`id`, `label`, `grants`); the owner assigns them    |
+| `portal`             | no       | Portal menu entry: `title`, `icon`, `sortOrder`                                 |
+
+Add `"$schema": "./node_modules/marcapony/manifest.schema.json"` for completion
+in your editor. Projects linked before this format keep working unchanged.
+
+The source ignore rules apply in this order, and a later one can re-include
+with `!` what an earlier one excluded: your `.gitignore` files and
+`.git/info/exclude`, then `ignore` in `marcapony.json`. Dependencies, the
+build output and credential files are never saved, whatever the rules say.
+`npx marcapony app source --dry-run` lists what the next deploy saves and why
+each other file is skipped.
+
+The app runs in the Marcapony runtime: a standard fetch handler, no file
+system at request time and limited CPU time per request. Prefer web APIs
+(`fetch`, `Request`, `Response`, `crypto`) over Node built-ins.
 
 Published apps keep **no storage of their own** — a bundle may not declare
 storage bindings. Anything that has to persist lives in Marcapony, which the

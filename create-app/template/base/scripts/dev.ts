@@ -2,8 +2,8 @@
  * Local dev: Vite serves the UI and proxies `/api` here, where the same Hono app
  * that ships to production handles the request.
  *
- * Caveat worth knowing: this runs under Bun, not the Workers runtime. The two
- * are close but not identical, so a deployed app can still surface something
+ * Caveat worth knowing: this runs under Bun, not the Marcapony runtime. The
+ * two are close but not identical, so a deployed app can still surface something
  * local dev did not. Verify after `bun run deploy`, and prefer plain
  * web APIs (fetch, Request, Response, crypto) over Node built-ins in
  * `src/server` — those are the ones that behave the same in both.
@@ -12,12 +12,15 @@ import { readFileSync, existsSync } from 'node:fs'
 import app from '../src/server/index'
 
 const API_PORT = 8787
-const ENV_FILE = '.dev.vars'
+// `.env.local` is where `bun run link` writes the key; `.dev.vars` is read for
+// projects linked before marcapony.json version 2.
+const ENV_FILES = ['.env.local', '.dev.vars']
 
 function loadDevVars(): Record<string, string> {
-  if (!existsSync(ENV_FILE)) return {}
+  const file = ENV_FILES.find((name) => existsSync(name))
+  if (!file) return {}
   const out: Record<string, string> = {}
-  for (const line of readFileSync(ENV_FILE, 'utf8').split('\n')) {
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
     const eq = trimmed.indexOf('=')
@@ -39,7 +42,7 @@ function readPlacement(): string | undefined {
 const env = loadDevVars()
 if (!env.MARCAPONY_API_KEY) {
   console.warn(
-    `No MARCAPONY_API_KEY in ${ENV_FILE} — /api routes that call Marcapony will fail.\nRun \`bun run link\` to get one.`,
+    `No MARCAPONY_API_KEY in ${ENV_FILES[0]}: /api routes that call Marcapony will fail.\nRun \`bun run link\` to get one.`,
   )
 }
 

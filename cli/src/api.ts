@@ -13,6 +13,8 @@ export interface DeploymentView {
   hostname: string | null
   error: string | null
   createdAt?: string
+  /** Things the deploy did not fail on but the owner should fix, such as a required value not set. */
+  warnings?: string[]
 }
 
 export interface DeploymentRequest {
@@ -33,12 +35,14 @@ export interface DeploymentRequest {
   baseSourceRef?: string | null
   /** Replace commits this project has not seen. Recorded on the deployment. */
   force?: boolean
+  /** A version 2 marcapony.json, sent as written; the platform translates it. */
+  manifest?: Record<string, unknown>
 }
 
 /** What `POST /ext/v1/deployments/validate` checks before the build. */
 export type ValidateRequest = Pick<
   DeploymentRequest,
-  'placement' | 'dataAccess' | 'permissions' | 'portal' | 'baseSourceRef' | 'force'
+  'placement' | 'dataAccess' | 'permissions' | 'portal' | 'baseSourceRef' | 'force' | 'manifest'
 > & { withSource?: boolean }
 
 export interface DeploymentSource {

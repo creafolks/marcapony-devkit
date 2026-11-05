@@ -44,12 +44,12 @@ Requires [Bun](https://bun.sh).
 
 ```sh
 bun install
-bun run link     # paste the connection code from the app's page; writes .dev.vars and AGENTS.md
+bun run link     # paste the connection code from the app's page; writes .env.local and AGENTS.md
 bun run dev      # interface and /api routes on your machine
 bun run deploy   # build and publish; prints the address
 ```
 
-`.dev.vars` holds the app key. Never commit it, and never send it to the
+`.env.local` holds the app key. Never commit it, and never send it to the
 browser: the interface calls this app's own `/api` routes, and only those talk
 to Marcapony. `MARCAPONY_APP_ID` is set by Marcapony when the app is deployed;
 locally there is none, so nobody is signed in during `bun run dev`.

@@ -16,7 +16,15 @@ import {
   type DeploymentView,
   type SourceHead,
 } from './api.js'
-import { readConfig, resolveApiKey, resolveApiRoot, type MarcaponyConfig } from './config.js'
+import {
+  isManifestV2,
+  publicDirOf,
+  readConfig,
+  resolveApiKey,
+  resolveApiRoot,
+  serverPathOf,
+  type MarcaponyConfig,
+} from './config.js'
 import { readBase, writeBase } from './lock.js'
 import { CONFLICT_MARKER } from './merge.js'
 import {
@@ -127,7 +135,7 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     apiRoot,
     apiKey,
     {
-      ...declarations,
+      ...(isManifestV2(config) ? { manifest: manifestOf(config) } : declarations),
       withSource: !!sourceFiles && sourceFiles.length > 0,
       ...(base !== undefined ? { baseSourceRef: base } : {}),
       ...(force ? { force: true } : {}),
@@ -139,26 +147,33 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   log(`Building: ${config.build}`)
   ;(options.runBuild ?? defaultRunBuild)(config.build, options.cwd)
 
-  const workerPath = join(options.cwd, config.worker)
+  const serverPath = serverPathOf(config)
+  const workerPath = join(options.cwd, serverPath)
   if (!existsSync(workerPath)) {
+    const field = isManifestV2(config) ? 'server' : 'worker'
     throw new Error(
-      `Worker module not found at ${config.worker}. Check the "worker" path in marcapony.json.`,
+      `Server module not found at ${serverPath}. Check the "${field}" path in marcapony.json.`,
     )
   }
   const worker = readFileSync(workerPath).toString('base64')
 
   let assets: ReturnType<typeof collectAssets> | undefined
-  if (config.assets) {
-    const assetsPath = join(options.cwd, config.assets)
+  const publicDir = publicDirOf(config, options.cwd)
+  if (publicDir) {
+    const assetsPath = join(options.cwd, publicDir)
     if (!existsSync(assetsPath) || !statSync(assetsPath).isDirectory()) {
+      const field = isManifestV2(config) ? 'public.dir' : 'assets'
       throw new Error(
-        `Assets directory not found at ${config.assets}. Check the "assets" path in marcapony.json.`,
+        `Public files not found at ${publicDir}. Check the "${field}" path in marcapony.json.`,
       )
     }
-    assets = collectAssets(assetsPath)
-    log(`Uploading worker + ${assets.length} asset(s)`)
+    assets = collectAssets(
+      assetsPath,
+      isManifestV2(config) ? (config.public?.ignore ?? []) : undefined,
+    )
+    log(`Uploading the server + ${assets.length} public file(s)`)
   } else {
-    log('Uploading worker')
+    log('Uploading the server')
   }
 
   // 4. Push on top of the base (on top of the head with --force). An empty
@@ -179,11 +194,8 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     apiKey,
     {
       worker: { main: 'index.js', content: worker, encoding: 'base64' },
-      ...(config.compatibilityDate ? { compatibilityDate: config.compatibilityDate } : {}),
-      ...(config.compatibilityFlags ? { compatibilityFlags: config.compatibilityFlags } : {}),
       ...(assets ? { assets } : {}),
-      ...(config.assetsConfig ? { assetsConfig: config.assetsConfig } : {}),
-      ...declarations,
+      ...runtimeFieldsOf(config),
       ...(source ? { source } : {}),
       ...(base !== undefined ? { baseSourceRef: base } : {}),
       ...(force ? { force: true } : {}),
@@ -202,6 +214,8 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     await sleep(POLL_INTERVAL_MS)
     deployment = await fetchDeployment(apiRoot, apiKey, deployment.id, fetchImpl)
   }
+
+  for (const warning of deployment.warnings ?? []) log(`Warning: ${warning}`)
 
   if (deployment.status === 'failed') {
     throw new Error(`Deploy failed: ${deployment.error ?? 'unknown error'}`)
@@ -223,6 +237,25 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     log(`Live (deployment ${deployment.id})`)
   }
   return { deployment, source, base: base ?? null, forced: force }
+}
+
+/**
+ * What the deploy says about the runtime: a version 2 manifest goes as
+ * written and the platform translates it; version 1 fields go as before.
+ */
+function runtimeFieldsOf(config: MarcaponyConfig): Partial<DeploymentRequest> {
+  if (isManifestV2(config)) return { manifest: manifestOf(config) }
+  return {
+    ...(config.compatibilityDate ? { compatibilityDate: config.compatibilityDate } : {}),
+    ...(config.compatibilityFlags ? { compatibilityFlags: config.compatibilityFlags } : {}),
+    ...(config.assetsConfig ? { assetsConfig: config.assetsConfig } : {}),
+    ...declarationsOf(config),
+  }
+}
+
+function manifestOf(config: MarcaponyConfig): Record<string, unknown> {
+  const { $schema: _schema, ...manifest } = config
+  return manifest
 }
 
 function declarationsOf(

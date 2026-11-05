@@ -1,12 +1,16 @@
 {
+  "$schema": "./node_modules/marcapony/manifest.schema.json",
+  "manifest": 2,
   "build": "bun run build",
-  "worker": "dist/worker/index.js",
-  "assets": "dist/client",
-  "assetsConfig": {
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+  "server": "dist/server/index.js",
+  "public": {
+    "dir": "dist/client"
   },
-  "compatibilityDate": "2026-10-01",
-  "compatibilityFlags": ["nodejs_compat"],
+  "routes": {
+    "server": ["/api/*"],
+    "notFound": "spa"
+  },
+  "runtime": "2026-10",
+  "ignore": ["coverage/", "*.log"],
   "placement": "public"
 }

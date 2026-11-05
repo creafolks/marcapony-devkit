@@ -9,6 +9,8 @@ import { runGuide } from './guide.js'
 import { runPull } from './pull.js'
 import { runStatus } from './status.js'
 import { readHidden, readStdin, runEnvDelete, runEnvList, runEnvSet } from './env.js'
+import { runMigrateConfig } from './migrate.js'
+import { runSourceDryRun } from './source-command.js'
 
 export { runLink } from './link.js'
 export { runDeploy, runDeployDetailed } from './deploy.js'
@@ -16,6 +18,8 @@ export { runGuide } from './guide.js'
 export { runPull } from './pull.js'
 export { runStatus } from './status.js'
 export { runEnvDelete, runEnvList, runEnvSet } from './env.js'
+export { migrateConfig, runMigrateConfig } from './migrate.js'
+export { runSourceDryRun } from './source-command.js'
 export * from './lock.js'
 export * from './merge.js'
 export * from './config.js'
@@ -37,11 +41,13 @@ Usage
   marcapony app env list [--show] [--json]
   marcapony app env set <NAME> [--secret]     (value from a hidden prompt or stdin)
   marcapony app env delete <NAME>
+  marcapony app source --dry-run [--json]
+  marcapony app migrate-config
   marcapony guide [--cwd <dir>]
 
 Commands
   app link     Exchange a one-time pairing code for this project's environment
-               key. Writes .dev.vars, marcapony.json and AGENTS.md. Get the code
+               key. Writes .env.local, marcapony.json and AGENTS.md. Get the code
                from the app's page in your Marcapony dashboard.
   app deploy   Run the project's build, upload the bundle, and wait until it is
                live. The target environment comes from the key — there is no
@@ -60,6 +66,11 @@ Commands
                running app. A value is never taken from the command line:
                type it at the hidden prompt or pipe it in. Secrets are never
                shown again.
+  app source   With --dry-run, list the files the next deploy saves and the
+               rule that skipped each other one.
+  app migrate-config
+               Rewrite marcapony.json to the current format and print what
+               changed.
   guide        Print the AI-readable setup guide for this project (the same
                content written to AGENTS.md), listing the SDK calls and schemas
                your app key can use.
@@ -104,6 +115,7 @@ const BOOLEAN_FLAGS = new Set([
   'json',
   'secret',
   'show',
+  'dry-run',
 ])
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -201,6 +213,19 @@ export async function main(argv: string[]): Promise<number> {
       if (result.patch !== undefined && !json) process.stdout.write(result.patch)
       if (json) console.log(JSON.stringify({ ok: result.status !== 'conflicts', ...result }))
       return result.status === 'conflicts' ? EXIT.conflicts : EXIT.ok
+    }
+    if (namespace === 'app' && action === 'source') {
+      if (flags['dry-run'] !== true) {
+        throw new CliError('Usage: marcapony app source --dry-run', { exitCode: EXIT.failed })
+      }
+      const plan = runSourceDryRun({ cwd, log })
+      if (json) console.log(JSON.stringify({ ok: true, ...plan }))
+      return EXIT.ok
+    }
+    if (namespace === 'app' && action === 'migrate-config') {
+      const result = runMigrateConfig({ cwd, log })
+      if (json) console.log(JSON.stringify({ ok: true, ...result }))
+      return EXIT.ok
     }
     if (namespace === 'app' && action === 'env') {
       const [, , sub, name] = command
