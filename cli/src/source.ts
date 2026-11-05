@@ -117,6 +117,9 @@ export function collectSourceFiles(
       }
       if (!entry.isFile()) continue
       if (ALWAYS_IGNORED_FILE.test(entry.name)) continue
+      // The sync state of this checkout, not part of the app: pushing it would
+      // make every pull of a teammate's deploy touch it.
+      if (!rel && entry.name === 'marcapony.lock') continue
       if (rules.some((r) => r.test(path))) continue
       files.push(path)
       total += statSync(join(cwd, path)).size
@@ -176,6 +179,13 @@ export interface PushSourceOptions {
   cwd: string
   files: string[]
   grant: SourceGrant
+  /**
+   * The commit the new one goes on top of: the project's base (the version
+   * in `marcapony.lock`), or null for the first push to a branch. Never the remote head as
+   * found at push time: that would silently replace changes this project has
+   * not seen. A head that moved since the base makes git refuse the push.
+   */
+  parent: string | null
   message?: string
   /** Injected in tests; defaults to isomorphic-git's network operations. */
   push?: typeof git.push
@@ -187,12 +197,15 @@ export function tokenSecret(token: string): string {
   return token.split('?expires=')[0] as string
 }
 
+/** Git refused the push because the branch has commits the parent does not. */
+export class SourcePushRejectedError extends Error {}
+
 /**
- * Commit the collected files on top of the remote branch (when it exists) and
- * push. Returns the new commit id.
+ * Commit the collected files on top of `parent` and push. Returns the new
+ * commit id. Fails closed: a fetch error is an error, never "no parent".
  */
 export async function pushSource(options: PushSourceOptions): Promise<string> {
-  const { cwd, files, grant } = options
+  const { cwd, files, grant, parent } = options
   if (files.length === 0) throw new Error('No source files to push')
   const push = options.push ?? git.push
   const fetchRemote = options.fetch ?? git.fetch
@@ -203,13 +216,11 @@ export async function pushSource(options: PushSourceOptions): Promise<string> {
   try {
     await git.init({ ...common, defaultBranch: grant.branch })
     // A fresh gitdir has no remotes. isomorphic-git's fetch needs the remote's
-    // refspec in the config to write refs/remotes/origin/*; without it the
-    // fetch fails, the commit gets no parent and every push after the first is
-    // rejected as non-fast-forward.
+    // refspec in the config to write refs/remotes/origin/*.
     await git.addRemote({ ...common, remote: 'origin', url: grant.remote })
 
-    let parent: string[] = []
-    try {
+    if (parent) {
+      // The parent's objects must be local for the commit and the pack.
       await fetchRemote({
         ...common,
         http,
@@ -220,9 +231,13 @@ export async function pushSource(options: PushSourceOptions): Promise<string> {
         tags: false,
         onAuth,
       })
-      parent = [await git.resolveRef({ ...common, ref: `refs/remotes/origin/${grant.branch}` })]
-    } catch {
-      parent = []
+      try {
+        await git.readCommit({ ...common, oid: parent })
+      } catch {
+        throw new SourcePushRejectedError(
+          `Your base ${parent.slice(0, 7)} is no longer on the branch. Run \`marcapony app pull\`.`,
+        )
+      }
     }
 
     for (const filepath of files) await git.add({ ...common, filepath })
@@ -231,18 +246,77 @@ export async function pushSource(options: PushSourceOptions): Promise<string> {
       ref: `refs/heads/${grant.branch}`,
       message: options.message?.trim() || 'marcapony app deploy',
       author: { name: 'Marcapony CLI', email: 'cli@marcapony.com' },
-      ...(parent.length > 0 ? { parent } : {}),
+      parent: parent ? [parent] : [],
     })
 
-    await push({
+    try {
+      await push({
+        ...common,
+        http,
+        url: grant.remote,
+        ref: grant.branch,
+        remoteRef: grant.branch,
+        onAuth,
+      })
+    } catch (err) {
+      const e = err as { code?: string; data?: { reason?: string } }
+      if (e?.code === 'PushRejectedError') {
+        throw new SourcePushRejectedError(
+          'Someone pushed to this environment while you were building. Run `marcapony app pull`.',
+        )
+      }
+      throw err
+    }
+    return oid
+  } finally {
+    rmSync(gitdir, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Fetch the environment branch with a read token and return the files of a
+ * commit (`marcapony app pull`). The temp gitdir is gone before this returns.
+ */
+export async function readRemoteFiles(options: {
+  grant: { remote: string; branch: string; token: string }
+  commits: Array<string | null>
+  fetch?: typeof git.fetch
+}): Promise<Array<Map<string, Uint8Array> | null>> {
+  const gitdir = mkdtempSync(join(tmpdir(), 'marcapony-pull-'))
+  const fetchRemote = options.fetch ?? git.fetch
+  const common = { fs, gitdir }
+  try {
+    await git.init({ ...common, bare: true, defaultBranch: options.grant.branch })
+    await git.addRemote({ ...common, remote: 'origin', url: options.grant.remote })
+    await fetchRemote({
       ...common,
       http,
-      url: grant.remote,
-      ref: grant.branch,
-      remoteRef: grant.branch,
-      onAuth,
+      url: options.grant.remote,
+      remote: 'origin',
+      ref: options.grant.branch,
+      singleBranch: true,
+      tags: false,
+      onAuth: () => ({ username: 'x', password: tokenSecret(options.grant.token) }),
     })
-    return oid
+    const out: Array<Map<string, Uint8Array> | null> = []
+    for (const commit of options.commits) {
+      if (!commit) {
+        out.push(new Map())
+        continue
+      }
+      try {
+        const files = new Map<string, Uint8Array>()
+        const paths = await git.listFiles({ ...common, ref: commit })
+        for (const filepath of paths) {
+          const { blob } = await git.readBlob({ ...common, oid: commit, filepath })
+          files.set(filepath, blob)
+        }
+        out.push(files)
+      } catch {
+        out.push(null)
+      }
+    }
+    return out
   } finally {
     rmSync(gitdir, { recursive: true, force: true })
   }

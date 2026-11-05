@@ -38,18 +38,40 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function makeFetch(responses: Response[]): {
+/**
+ * Answers in order from `responses`. The sync routes
+ * (source-head, validate, grant close) answer from `routes` instead and are not
+ * recorded in `calls`; by default they behave like a platform older than the
+ * sync rule (404), so these tests cover the deploy as it was.
+ */
+function makeFetch(
+  responses: Response[],
+  routes: Record<string, () => Response> = {},
+): {
   fetch: typeof fetch
   calls: Array<{ url: string; init: RequestInit }>
+  syncCalls: Array<{ url: string; init: RequestInit }>
 } {
   const calls: Array<{ url: string; init: RequestInit }> = []
+  const syncCalls: Array<{ url: string; init: RequestInit }> = []
+  const defaults: Record<string, () => Response> = {
+    '/source-head': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/validate': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/close': () => jsonResponse({ data: { outcome: 'ok', headAfter: null } }),
+  }
   const impl = (async (url: string | URL | Request, init?: RequestInit) => {
-    calls.push({ url: String(url), init: init ?? {} })
+    const u = String(url)
+    const route = Object.entries({ ...defaults, ...routes }).find(([suffix]) => u.endsWith(suffix))
+    if (route) {
+      syncCalls.push({ url: u, init: init ?? {} })
+      return route[1]()
+    }
+    calls.push({ url: u, init: init ?? {} })
     const next = responses.shift()
     if (!next) throw new Error('unexpected extra request')
     return next
   }) as typeof fetch
-  return { fetch: impl, calls }
+  return { fetch: impl, calls, syncCalls }
 }
 
 let dir: string
@@ -896,36 +918,64 @@ describe('source push', () => {
     expect(logs.join('\n')).not.toContain('sk_live_abc')
   })
 
-  it('configures origin before fetching, so the commit can build on the remote branch', async () => {
+  it('configures origin before fetching the base, and fails closed when the fetch fails', async () => {
     scaffold()
     const git = (await import('isomorphic-git')).default
     const seen: Array<{ url: unknown; refspec: unknown }> = []
-    await pushSource({
-      cwd: dir,
-      files: ['package.json'],
-      grant: GRANT,
-      fetch: (async (o: { fs: never; gitdir: string }) => {
-        seen.push({
-          url: await git.getConfig({ fs: o.fs, gitdir: o.gitdir, path: 'remote.origin.url' }),
-          refspec: await git.getConfig({ fs: o.fs, gitdir: o.gitdir, path: 'remote.origin.fetch' }),
-        })
-        throw new Error('empty remote')
-      }) as never,
-      push: (async () => ({ ok: true, error: null, refs: {} })) as never,
-    })
+    let pushed = false
+    await expect(
+      pushSource({
+        cwd: dir,
+        files: ['package.json'],
+        grant: GRANT,
+        parent: 'a'.repeat(40),
+        fetch: (async (o: { fs: never; gitdir: string }) => {
+          seen.push({
+            url: await git.getConfig({ fs: o.fs, gitdir: o.gitdir, path: 'remote.origin.url' }),
+            refspec: await git.getConfig({
+              fs: o.fs,
+              gitdir: o.gitdir,
+              path: 'remote.origin.fetch',
+            }),
+          })
+          throw new Error('network down')
+        }) as never,
+        push: (async () => {
+          pushed = true
+          return { ok: true, error: null, refs: {} }
+        }) as never,
+      }),
+    ).rejects.toThrow('network down')
     expect(seen).toEqual([{ url: GRANT.remote, refspec: '+refs/heads/*:refs/remotes/origin/*' }])
+    expect(pushed).toBe(false)
   })
 
-  it('commits locally in a temp gitdir and pushes on top of the remote branch', async () => {
+  it('turns a non-fast-forward rejection into "pull first"', async () => {
+    scaffold()
+    await expect(
+      pushSource({
+        cwd: dir,
+        files: ['package.json'],
+        grant: GRANT,
+        parent: null,
+        push: (async () => {
+          throw Object.assign(new Error('rejected'), { code: 'PushRejectedError' })
+        }) as never,
+      }),
+    ).rejects.toThrow('marcapony app pull')
+  })
+
+  it('commits locally in a temp gitdir and pushes the first commit of a branch', async () => {
     scaffold()
     const pushes: Array<Record<string, unknown>> = []
     const oid = await pushSource({
       cwd: dir,
       files: ['src/app.ts', 'package.json'],
       grant: GRANT,
+      parent: null,
       message: 'first',
       fetch: (async () => {
-        throw new Error('empty remote')
+        throw new Error('a first push never fetches')
       }) as never,
       push: (async (o: Record<string, unknown>) => {
         pushes.push(o)

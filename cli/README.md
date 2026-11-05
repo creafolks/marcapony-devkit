@@ -49,11 +49,16 @@ filled in.
 npx marcapony app deploy
 ```
 
-1. Runs the `build` command from `marcapony.json`.
-2. Reads the built backend and, if configured, the `assets` directory.
-3. Uploads it to Marcapony, which publishes it and supplies
+1. Checks `marcapony.json` with Marcapony, so a deploy it would refuse stops
+   before anything is built.
+2. Checks that nobody deployed to this environment since this project last
+   synced with it (see [Working as a team](#working-as-a-team)).
+3. Runs the `build` command from `marcapony.json`.
+4. Saves the source and uploads the built backend and, if configured, the
+   `assets` directory. Marcapony publishes it and supplies
    `MARCAPONY_API_KEY` / `MARCAPONY_API_URL` at runtime.
-4. Waits until it is live, then prints the address.
+5. Waits until it is live, prints the address and records the new version in
+   `marcapony.lock`.
 
 When the platform reports the deploy as failed, the CLI prints `Deploy failed:`
 with the reason and exits with a non-zero code; the version that was live keeps
@@ -83,6 +88,47 @@ if it fails, the deploy still goes live.
 - `--no-source` skips saving for one deploy. Set `MARCAPONY_SOURCE_PUSH=0` to
   skip it every time.
 
+## Working as a team
+
+Several people, CI and coding agents can deploy the same app. Nothing replaces
+a change its author has not seen:
+
+- `marcapony.lock` records, per environment, the version this project last
+  synced with. It holds no secret. **Commit it** with the rest of your project,
+  so a fresh checkout, CI and every agent share it.
+- If someone deployed after your last sync, `marcapony app deploy` stops before
+  the build and tells you who, with exit code 2. Run `marcapony app pull`, or
+  `marcapony app deploy --force` to replace their changes (the dashboard shows
+  that you did).
+- `marcapony app pull` merges the newer version into your files. Files you did
+  not touch are updated; files both sides changed are merged, and overlapping
+  changes get git's conflict markers (`<<<<<<<`, `|||||||`, `=======`,
+  `>>>>>>>`) with exit code 3. A deploy refuses files that still contain
+  markers. `--patch` prints the changes instead of applying them, `--check`
+  runs your build afterwards, and `--yes` merges into files with uncommitted
+  changes without asking.
+- `marcapony app status` shows the latest saved version, your base and the
+  next command to run.
+
+If your team keeps its code in its own git repository, that stays the source of
+truth: when your files already contain a teammate's change, `pull` only moves
+the base. Giving each developer or agent an environment of its own (for
+example `test-ayse`) and meeting on `test` through pulls also works well.
+
+## Scripts and agents
+
+Every command takes `--json` and prints one JSON object on stdout (progress goes
+to stderr). Commands never wait for input without a terminal. Exit codes:
+
+| Code | Meaning                                                |
+| ---- | ------------------------------------------------------ |
+| 0    | Done                                                   |
+| 1    | Error                                                  |
+| 2    | The environment has changes this project has not pulled |
+| 3    | A pull left conflicts to resolve                       |
+| 4    | Refused by Marcapony; the message says why             |
+| 5    | The project is not linked                              |
+
 ## Configuration reference
 
 | Field                | Required | Meaning                                                                      |
@@ -111,6 +157,11 @@ supplied key already reaches.
 | `--cwd <dir>`      | Project directory (defaults to the current directory) |
 | `--message <text>` | Version message saved with the source (deploy only)   |
 | `--no-source`      | Do not save the project source with this deploy       |
+| `--force`          | Deploy over changes you have not pulled (deploy only) |
+| `--patch`          | Print the remote changes as a patch (pull only)       |
+| `--check`          | Run the build after a pull (pull only)                |
+| `--yes`            | Never ask (pull only)                                 |
+| `--json`           | Print the result as JSON                              |
 
 Requires Node 20+ or Bun.
 
