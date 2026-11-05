@@ -115,6 +115,28 @@ truth: when your files already contain a teammate's change, `pull` only moves
 the base. Giving each developer or agent an environment of its own (for
 example `test-ayse`) and meeting on `test` through pulls also works well.
 
+## Settings and secrets
+
+An app often needs values of its own, such as a payment provider's key or a
+webhook address. Set them per environment, in the dashboard or from the CLI;
+the app reads them from `env`, like `MARCAPONY_API_KEY`.
+
+```bash
+marcapony app env set IYZICO_API_KEY --secret   # asks for the value, hidden
+echo "https://example.com/hook" | marcapony app env set BOOKING_WEBHOOK_URL
+marcapony app env list [--show]
+marcapony app env delete BOOKING_WEBHOOK_URL
+```
+
+- A value is never taken from the command line, so it stays out of your shell
+  history: type it at the hidden prompt or pipe it in.
+- A secret is never shown again; `list --show` prints settings only.
+- A change reaches the running app at once, without a deploy.
+- Names use capital letters, digits and underscores; `MARCAPONY_` is reserved.
+  An environment holds up to 50 values of up to 5 KiB each.
+- For local development, keep your own values in your local env file. Nothing
+  downloads secrets.
+
 ## Scripts and agents
 
 Every command takes `--json` and prints one JSON object on stdout (progress goes

@@ -8,12 +8,14 @@ import { runLink } from './link.js'
 import { runGuide } from './guide.js'
 import { runPull } from './pull.js'
 import { runStatus } from './status.js'
+import { readHidden, readStdin, runEnvDelete, runEnvList, runEnvSet } from './env.js'
 
 export { runLink } from './link.js'
 export { runDeploy, runDeployDetailed } from './deploy.js'
 export { runGuide } from './guide.js'
 export { runPull } from './pull.js'
 export { runStatus } from './status.js'
+export { runEnvDelete, runEnvList, runEnvSet } from './env.js'
 export * from './lock.js'
 export * from './merge.js'
 export * from './config.js'
@@ -32,6 +34,9 @@ Usage
   marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--json]
   marcapony app status [--cwd <dir>] [--json]
   marcapony app pull [--cwd <dir>] [--patch] [--check] [--yes] [--json]
+  marcapony app env list [--show] [--json]
+  marcapony app env set <NAME> [--secret]     (value from a hidden prompt or stdin)
+  marcapony app env delete <NAME>
   marcapony guide [--cwd <dir>]
 
 Commands
@@ -50,6 +55,11 @@ Commands
   app pull     Merge the environment's newer changes into your files. Conflicts
                get git's diff3 markers. Updates marcapony.lock; commit that
                file so teammates, CI and agents share the base.
+  app env      The environment's own settings and secrets, injected into the
+               app as env values on every deploy and applied at once to the
+               running app. A value is never taken from the command line:
+               type it at the hidden prompt or pipe it in. Secrets are never
+               shown again.
   guide        Print the AI-readable setup guide for this project (the same
                content written to AGENTS.md), listing the SDK calls and schemas
                your app key can use.
@@ -64,6 +74,8 @@ Options
   --patch           Print the remote changes as a patch instead of applying them
   --check           Run the project's build after a pull
   --yes             Never ask; merge into files with uncommitted changes
+  --secret          Store the value as a secret (env set only)
+  --show            Print setting values (env list only; secrets never)
   --json            Print the result as JSON (for scripts and agents)
   -h, --help        Show this help
   -v, --version     Show the CLI version
@@ -90,6 +102,8 @@ const BOOLEAN_FLAGS = new Set([
   'check',
   'yes',
   'json',
+  'secret',
+  'show',
 ])
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -187,6 +201,30 @@ export async function main(argv: string[]): Promise<number> {
       if (result.patch !== undefined && !json) process.stdout.write(result.patch)
       if (json) console.log(JSON.stringify({ ok: result.status !== 'conflicts', ...result }))
       return result.status === 'conflicts' ? EXIT.conflicts : EXIT.ok
+    }
+    if (namespace === 'app' && action === 'env') {
+      const [, , sub, name] = command
+      const base = { cwd, cliEnv, env: process.env, log }
+      let result: unknown
+      if (sub === 'list') {
+        result = await runEnvList({ ...base, show: flags.show === true })
+      } else if (sub === 'set') {
+        result = await runEnvSet({
+          ...base,
+          name,
+          secret: flags.secret === true,
+          readValue: () =>
+            process.stdin.isTTY ? readHidden(`Value for ${name ?? ''}: `) : readStdin(),
+        })
+      } else if (sub === 'delete') {
+        result = await runEnvDelete({ ...base, name })
+      } else {
+        throw new CliError('Usage: marcapony app env list | set <NAME> | delete <NAME>', {
+          exitCode: EXIT.failed,
+        })
+      }
+      if (json) console.log(JSON.stringify({ ok: true, result }))
+      return EXIT.ok
     }
     console.error(`Unknown command: ${command.join(' ')}\n`)
     console.error(USAGE)

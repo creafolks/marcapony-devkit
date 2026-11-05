@@ -462,3 +462,65 @@ describe('runStatus', () => {
     expect(result.next).toBe('marcapony app pull')
   })
 })
+
+describe('marcapony app env', () => {
+  it('sets a secret from the reader, never from an argument, and lists without secret values', async () => {
+    const { runEnvList, runEnvSet } = await import('../env')
+    const r = router({
+      '/environment-values/IYZICO_API_KEY': () => json({ data: { live: 'applied' } }),
+      '/environment-values': () =>
+        json({
+          data: [
+            {
+              name: 'IYZICO_API_KEY',
+              kind: 'secret',
+              value: null,
+              updatedAt: 'now',
+              updatedBy: null,
+            },
+            { name: 'FLAG', kind: 'setting', value: 'on', updatedAt: 'now', updatedBy: null },
+          ],
+        }),
+    })
+    const logs: string[] = []
+    const set = await runEnvSet({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: r.fetch,
+      log: (m) => logs.push(m),
+      name: 'IYZICO_API_KEY',
+      secret: true,
+      readValue: async () => 'sk_live_1',
+    })
+    expect(set.live).toBe('applied')
+    expect(r.calls[0]?.body).toEqual({ kind: 'secret', value: 'sk_live_1' })
+    expect(logs.join('\n')).not.toContain('sk_live_1')
+
+    const listed = await runEnvList({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: r.fetch,
+      log: (m) => logs.push(m),
+    })
+    expect(listed.find((v) => v.name === 'FLAG')?.value).toBeNull()
+  })
+
+  it('refuses a reserved or malformed name before asking for the value', async () => {
+    const { runEnvSet } = await import('../env')
+    let asked = false
+    const err = await runEnvSet({
+      cwd: dir,
+      env: {},
+      log: () => {},
+      name: 'MARCAPONY_X',
+      readValue: async () => {
+        asked = true
+        return 'v'
+      },
+    }).catch((e: unknown) => e)
+    expect((err as CliError).exitCode).toBe(EXIT.refused)
+    expect(asked).toBe(false)
+  })
+})
