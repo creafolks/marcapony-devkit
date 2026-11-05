@@ -26,11 +26,25 @@ export interface DeployOptions {
   message?: string
   /** Injected in tests so no real git push happens. */
   pushSourceImpl?: (options: PushSourceOptions) => Promise<string>
+  /** False when the user passed --no-source. Source push is on by default. */
+  source?: boolean
 }
 
-/** Source push is off unless MARCAPONY_SOURCE_PUSH=1 (spike, phase A1). */
-function sourcePushEnabled(env: NodeJS.ProcessEnv): boolean {
-  return env.MARCAPONY_SOURCE_PUSH === '1'
+/**
+ * Source push is on by default. `--no-source` turns it off for one run and
+ * MARCAPONY_SOURCE_PUSH=0 turns it off everywhere. Returns the reason when off.
+ */
+function sourcePushDisabledReason(options: DeployOptions): string | null {
+  if (options.source === false) return 'turned off with --no-source'
+  const value = options.env.MARCAPONY_SOURCE_PUSH?.trim().toLowerCase()
+  if (value === '0' || value === 'false' || value === 'off') {
+    return 'turned off by MARCAPONY_SOURCE_PUSH'
+  }
+  return null
+}
+
+function shortCommit(commit: string): string {
+  return commit.slice(0, 7)
 }
 
 const POLL_INTERVAL_MS = 2000
@@ -48,7 +62,7 @@ function defaultSleep(ms: number): Promise<void> {
  * `marcapony app deploy` — build locally, upload the bundle, wait for the
  * platform to put it live. The environment is derived from the key, so there is
  * no --env flag: deploying with the test key targets the test environment.
- * wrangler and git are never involved.
+ * wrangler and the project's own git repo are never involved.
  */
 export async function runDeploy(options: DeployOptions): Promise<DeploymentView> {
   const log = options.log ?? console.log
@@ -65,7 +79,8 @@ export async function runDeploy(options: DeployOptions): Promise<DeploymentView>
   }
   const apiRoot = resolveApiRoot(options.cliEnv)
 
-  const sourceFiles = sourcePushEnabled(options.env) ? safeCollect(options.cwd, config, log) : null
+  const disabledReason = sourcePushDisabledReason(options)
+  const sourceFiles = disabledReason ? null : safeCollect(options.cwd, config, log)
 
   log(`Building: ${config.build}`)
   ;(options.runBuild ?? defaultRunBuild)(config.build, options.cwd)
@@ -99,6 +114,8 @@ export async function runDeploy(options: DeployOptions): Promise<DeploymentView>
     source = await trySourcePush({ options, apiRoot, apiKey, files: sourceFiles, log })
   } else if (sourceFiles) {
     log('Source not saved: no files left after the ignore rules')
+  } else if (disabledReason) {
+    log(`Source not saved: ${disabledReason}`)
   }
 
   let deployment = await createDeployment(
@@ -163,8 +180,9 @@ function safeCollect(
 }
 
 /**
- * Spike behaviour: nothing in here may fail the deploy. A secret finding skips
- * the push (phase A2 turns it into a hard stop); any other failure is a warning.
+ * Nothing in here may fail the deploy. A secret finding skips the push, an
+ * environment without source storage skips it quietly, and any other failure
+ * is a warning.
  */
 async function trySourcePush(args: {
   options: DeployOptions
@@ -182,10 +200,13 @@ async function trySourcePush(args: {
       return null
     }
     const grant = await fetchSourceGrant(apiRoot, apiKey, options.fetchImpl ?? fetch)
-    if (!grant) return null
+    if (!grant) {
+      log('Source not saved: this environment does not store source yet')
+      return null
+    }
     const push = options.pushSourceImpl ?? pushSource
     const commit = await push({ cwd: options.cwd, files, grant, message: options.message })
-    log(`Source saved (${files.length} file(s), branch ${grant.branch})`)
+    log(`Source saved: commit ${shortCommit(commit)} (${files.length} file(s))`)
     const message = options.message?.trim()
     return {
       commit,
