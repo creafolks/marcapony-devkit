@@ -288,8 +288,10 @@ export async function fetchSourceHead(
   const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/source-head`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
-  // A platform older than the route matches `GET /deployments/:id` instead and
-  // answers 400 or 404 for the non-id path; either means "no sync rule".
+  // 400, 404 and 405 mean the route is not there. A platform older than the
+  // route answers this path through `GET /deployments/:id`, which fails with a
+  // server error, so this version is published after the platform. A 5xx is
+  // never read as "no sync": that would skip the head check during an outage.
   if (res.status === 400 || res.status === 404 || res.status === 405) return null
   if (!res.ok) throw await failure(res)
   const data = ((await res.json()) as { data?: Partial<SourceHead> }).data
