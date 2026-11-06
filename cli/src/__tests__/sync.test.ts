@@ -261,10 +261,10 @@ describe('runDeployDetailed with the sync rule', () => {
     expect((err as CliError).exitCode).toBe(EXIT.remoteChanges)
   })
 
-  it('on a platform without the sync rule pushes on top of the remote head, as 0.5 did', async () => {
+  it('when the route is not there (400) pushes on top of the remote head, as 0.5 did', async () => {
     const pushed: PushSourceOptions[] = []
     const r = router({
-      // An older platform matches `GET /deployments/:id` and refuses the non-id path.
+      // A platform that answers the route with 400 (it is not there): no sync rule.
       '/source-head': () => json({ error: { code: 'validation_failed', message: 'bad id' } }, 400),
       '/validate': () => json({ error: { code: 'not_found', message: 'no route' } }, 404),
       '/source-token': () =>
