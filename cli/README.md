@@ -122,6 +122,23 @@ if it fails, the deploy still goes live.
 - `--no-source` skips saving for one deploy. Set `MARCAPONY_SOURCE_PUSH=0` to
   skip it every time.
 
+#### The size limit
+
+Each app's saved source may use up to 50 MB: the files of every environment's
+latest version, each counted once. After a push the CLI prints the usage as last
+measured:
+
+```
+Source repo: 12.4 / 50 MB (37.6 MB left)
+```
+
+At or over the limit, a deploy that saves source is refused with exit code 4
+and both numbers; push a version without the large files (the push itself is
+always accepted), or deploy with `--no-source`. Right after such a push the
+platform measures the repo again, and the CLI waits for it. Directories such as
+`node_modules`, `.git` and `.wrangler`, and credential files, are never saved:
+the platform blocks a version that contains them, however it was pushed.
+
 ## Working as a team
 
 Several people, CI and coding agents can deploy the same app. Nothing replaces
@@ -143,6 +160,16 @@ a change its author has not seen:
   changes without asking.
 - `marcapony app status` shows the latest saved version, your base and the
   next command to run.
+
+### Starting from the saved source
+
+`marcapony app clone [dir] --code <code>` clones an environment's saved source
+into a new directory (the app's name by default) and links it, with a pairing
+code from the app page. The clone is ready to edit and deploy, and its commit is
+the base in `marcapony.lock`. The read token is handed to git only; it is never
+printed or written to a file. A plain `git clone` from the dashboard's clone
+dialog works too: after `marcapony app link` in it, its checked-out commit is
+taken as the base.
 
 If your team keeps its code in its own git repository, that stays the source of
 truth: when your files already contain a teammate's change, `pull` only moves
