@@ -8,6 +8,7 @@ import {
   closeSourceGrant,
   createDeployment,
   fetchDeployment,
+  fetchKeyInfo,
   fetchSourceGrant,
   fetchSourceHead,
   validateDeployment,
@@ -29,7 +30,9 @@ import { readBase, writeBase } from './lock.js'
 import { CONFLICT_MARKER } from './merge.js'
 import {
   SourcePushRejectedError,
+  blockingFindings,
   collectSourceFiles,
+  formatFinding,
   pushSource,
   scanForSecrets,
   type PushSourceOptions,
@@ -53,6 +56,10 @@ export interface DeployOptions {
   source?: boolean
   /** Replace commits on the branch that this project has not pulled. */
   force?: boolean
+  /** Warn when the app key expires within 14 days (one extra request after the deploy). */
+  checkKeyExpiry?: boolean
+  /** Injected in tests. */
+  now?: () => Date
 }
 
 /** What a deploy did, for `--json`. */
@@ -241,7 +248,35 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   } else {
     log(`Live (deployment ${deployment.id})`)
   }
+  if (options.checkKeyExpiry) {
+    await warnIfKeyExpiring(apiRoot, apiKey, fetchImpl, log, options.now?.() ?? new Date())
+  }
   return { deployment, source, base: base ?? null, forced: force }
+}
+
+export const KEY_EXPIRY_WARNING_DAYS = 14
+
+/** Best effort: a key that expires soon is renewed by linking again. Never fails the deploy. */
+export async function warnIfKeyExpiring(
+  apiRoot: string,
+  apiKey: string,
+  fetchImpl: typeof fetch,
+  log: (message: string) => void,
+  now: Date,
+): Promise<void> {
+  let info: Awaited<ReturnType<typeof fetchKeyInfo>>
+  try {
+    info = await fetchKeyInfo(apiRoot, apiKey, fetchImpl)
+  } catch {
+    return
+  }
+  if (!info?.expiresAt) return
+  const days = Math.ceil((new Date(info.expiresAt).getTime() - now.getTime()) / 86_400_000)
+  if (!Number.isFinite(days) || days > KEY_EXPIRY_WARNING_DAYS) return
+  const command = info.cliLabel === 'ci' ? 'marcapony app link --ci' : 'marcapony app link'
+  log(
+    `Warning: this app key expires in ${Math.max(days, 0)} day(s), on ${info.expiresAt.slice(0, 10)}. Get a pairing code from the app page and run \`${command}\` to renew it.`,
+  )
 }
 
 /**
@@ -355,10 +390,26 @@ async function trySourcePush(args: {
   const fetchImpl = options.fetchImpl ?? fetch
   try {
     const findings = scanForSecrets(options.cwd, files)
-    if (findings.length > 0) {
-      for (const f of findings) log(`Secret scan: ${f.rule} in ${f.path}:${f.line}`)
-      log('Warning: source not saved because the secret scan found possible secrets')
+    const blocking = blockingFindings(findings)
+    if (blocking.length > 0) {
+      log('Secret scan found possible secrets:')
+      for (const f of blocking) log(`  ${formatFinding(f)}`)
+      log(
+        blocking.some((f) => f.kind === 'provider')
+          ? 'Warning: source not saved. Move the keys to `marcapony app env set` and rotate them. The deploy continues.'
+          : 'Warning: source not saved. Move the values to `marcapony app env set`, or mark a high-entropy test string with a "marcapony-scan: allow" comment. The deploy continues.',
+      )
       return null
+    }
+    const allowed = findings.filter((f) => f.allowed)
+    if (allowed.length > 0) {
+      log(`Secret scan: ${allowed.length} match(es) allowed by comment or test-fixture rule:`)
+      for (const f of allowed) log(`  ${formatFinding(f)}`)
+      if (allowed.some((f) => f.kind === 'provider')) {
+        log(
+          'Warning: the platform does not accept the allow comment for provider keys (Stripe, AWS, GitHub and the like). The source is saved, but that version will be blocked from reading, and removing the key in a later version does not unblock it: rotate the key.',
+        )
+      }
     }
     const grant = await fetchSourceGrant(apiRoot, apiKey, fetchImpl, options.sleep)
     if (!grant) {

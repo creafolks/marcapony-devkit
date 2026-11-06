@@ -40,7 +40,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 /**
  * Answers in order from `responses`. The sync routes
- * (source-head, validate, grant close) answer from `routes` instead and are not
+ * (source-head, validate, grant close, key retirement, key info) answer from `routes` instead and are not
  * recorded in `calls`; by default they behave like a platform older than the
  * sync rule (404), so these tests cover the deploy as it was.
  */
@@ -58,6 +58,10 @@ function makeFetch(
     '/source-head': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
     '/validate': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
     '/close': () => jsonResponse({ data: { outcome: 'ok', headAfter: null } }),
+    // A platform older than key rotation; the rotation tests answer it themselves.
+    '/retire-previous': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/keys/current': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/ext/v1/me': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
   }
   const impl = (async (url: string | URL | Request, init?: RequestInit) => {
     const u = String(url)
@@ -694,7 +698,18 @@ describe('source push', () => {
     scaffold()
     writeFileSync(join(dir, 'src', 'leak.ts'), 'const k = "mpk_abcdefghijklmnop1234"\n')
     const findings = scanForSecrets(dir, ['src/app.ts', 'src/leak.ts'])
-    expect(findings).toEqual([{ path: 'src/leak.ts', line: 1, rule: 'Marcapony API key' }])
+    expect(findings).toEqual([
+      {
+        path: 'src/leak.ts',
+        line: 1,
+        ruleId: 'marcapony-key',
+        rule: 'Marcapony API key',
+        kind: 'provider',
+        masked: 'mpk_…',
+        allowed: false,
+      },
+    ])
+    expect(JSON.stringify(findings)).not.toContain('abcdefghijklmnop1234')
   })
 
   it('pushes the source by default and reports the short commit', async () => {
@@ -929,8 +944,31 @@ describe('source push', () => {
       log: (m) => logs.push(m),
     })
     expect(calls).toHaveLength(1)
-    expect(logs.join('\n')).toContain('Stripe-style secret key in src/leak.ts:1')
+    expect(logs.join('\n')).toContain('src/leak.ts:1  Stripe secret key  sk_l…')
     expect(logs.join('\n')).not.toContain('sk_live_abc')
+    expect(logs.join('\n')).toContain('The deploy continues.')
+  })
+
+  it('pushes when the only match is allowed by a comment, and lists it', async () => {
+    scaffold()
+    writeFileSync(
+      join(dir, 'src', 'fixture.ts'),
+      '// marcapony-scan: allow\nconst token = "Kq8vZ2pL0xW7nB4tR9mY3cF6"\n',
+    )
+    const { fetch: fetchImpl } = makeFetch([jsonResponse({ data: GRANT }, 201), live()])
+    const logs: string[] = []
+    await runDeploy({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl,
+      runBuild: () => {},
+      log: (m) => logs.push(m),
+      pushSourceImpl: async () => '1234567abcdef'.padEnd(40, '0'),
+    })
+    expect(logs.some((l) => l.startsWith('Secret scan: 1 match(es) allowed'))).toBe(true)
+    expect(logs).toContain('  src/fixture.ts:2  High-entropy secret assignment  Kq8v…')
+    expect(logs.some((l) => l.startsWith('Source saved'))).toBe(true)
   })
 
   it('configures origin before fetching the base, and fails closed when the fetch fails', async () => {

@@ -11,6 +11,7 @@ import { runStatus } from './status.js'
 import { readHidden, readStdin, runEnvDelete, runEnvList, runEnvSet } from './env.js'
 import { runMigrateConfig } from './migrate.js'
 import { runSourceDryRun } from './source-command.js'
+import { runScan } from './scan.js'
 
 export { runLink } from './link.js'
 export { runDeploy, runDeployDetailed } from './deploy.js'
@@ -20,6 +21,8 @@ export { runStatus } from './status.js'
 export { runEnvDelete, runEnvList, runEnvSet } from './env.js'
 export { migrateConfig, runMigrateConfig } from './migrate.js'
 export { runSourceDryRun } from './source-command.js'
+export { runScan } from './scan.js'
+export * from './scan-rules.js'
 export * from './lock.js'
 export * from './merge.js'
 export * from './config.js'
@@ -29,12 +32,12 @@ export * from './agents.js'
 
 // Kept in step with cli/package.json by a test — `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.6.0'
+const VERSION = '0.7.0'
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
 Usage
-  marcapony app link [--code <code>] [--cwd <dir>]
+  marcapony app link [--code <code>] [--ci] [--cwd <dir>]
   marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--json]
   marcapony app status [--cwd <dir>] [--json]
   marcapony app pull [--cwd <dir>] [--patch] [--check] [--yes] [--json]
@@ -43,12 +46,17 @@ Usage
   marcapony app env delete <NAME>
   marcapony app source --dry-run [--json]
   marcapony app migrate-config
+  marcapony scan [--cwd <dir>] [--json]
   marcapony guide [--cwd <dir>]
 
 Commands
   app link     Exchange a one-time pairing code for this project's environment
                key. Writes .env.local, marcapony.json and AGENTS.md. Get the code
-               from the app's page in your Marcapony dashboard.
+               from the app's page in your Marcapony dashboard. Keys last 90
+               days; linking again renews the key and revokes your earlier one
+               for the environment. With --ci the key is labelled for a
+               pipeline: store it in the pipeline's secret store as
+               MARCAPONY_API_KEY, and earlier keys stay valid.
   app deploy   Run the project's build, upload the bundle, and wait until it is
                live. The target environment comes from the key — there is no
                --env flag. The project source is saved with each deploy;
@@ -71,12 +79,18 @@ Commands
   app migrate-config
                Rewrite marcapony.json to the current format and print what
                changed.
+  scan         Run the secret scan alone over the files a deploy would save,
+               for a pre-commit hook or CI. Prints path:line, the rule and the
+               first four characters of the value. A line with a
+               "marcapony-scan: allow" comment, or the line below it, is
+               allowed and still listed.
   guide        Print the AI-readable setup guide for this project (the same
                content written to AGENTS.md), listing the SDK calls and schemas
                your app key can use.
 
 Options
   --code <code>     Pairing code (link only; prompted when omitted)
+  --ci              Make a key for a CI pipeline (link only)
   --cwd <dir>       Project directory (defaults to the current directory)
   --message <text>  Version message saved with the source (deploy only)
   --no-source       Do not save the project source with this deploy
@@ -93,7 +107,8 @@ Options
 
 Exit codes
   0 done, 1 error, 2 the environment has changes to pull, 3 conflicts to
-  resolve, 4 refused by the platform, 5 project not linked
+  resolve, 4 refused by the platform, 5 project not linked, 6 the secret
+  scan found possible secrets
 `
 
 export interface ParsedArgs {
@@ -116,6 +131,7 @@ const BOOLEAN_FLAGS = new Set([
   'secret',
   'show',
   'dry-run',
+  'ci',
 ])
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -171,12 +187,23 @@ export async function main(argv: string[]): Promise<number> {
       return 0
     }
     if (namespace === 'app' && action === 'link') {
-      await runLink({ cwd, cliEnv, code: stringFlag(flags, 'code'), env: process.env })
+      await runLink({
+        cwd,
+        cliEnv,
+        code: stringFlag(flags, 'code'),
+        ci: flags.ci === true,
+        env: process.env,
+      })
       return 0
     }
     const json = flags.json === true
     // With --json, progress goes to stderr so stdout is one JSON document.
     const log = json ? (m: string) => console.error(m) : (m: string) => console.log(m)
+    if (namespace === 'scan') {
+      const result = runScan({ cwd, log })
+      if (json) console.log(JSON.stringify({ ok: result.findings.length === 0, ...result }))
+      return result.findings.length > 0 ? EXIT.secretsFound : EXIT.ok
+    }
     if (namespace === 'app' && action === 'deploy') {
       const result = await runDeployDetailed({
         cwd,
@@ -186,6 +213,7 @@ export async function main(argv: string[]): Promise<number> {
         message: stringFlag(flags, 'message'),
         source: flags['no-source'] !== true,
         force: flags.force === true,
+        checkKeyExpiry: true,
       })
       if (json) console.log(JSON.stringify({ ok: true, ...result }))
       return EXIT.ok
