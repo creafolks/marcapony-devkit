@@ -139,7 +139,7 @@ export function nextSteps(dir: string, template: TemplateName = DEFAULT_TEMPLATE
     'Next:',
     `  cd ${dir}`,
     '  bun install',
-    '  bun run link    # writes your app key into .dev.vars',
+    '  bun run link    # writes your app key into .env.local',
     '  bun run dev',
     '',
     'When it is ready:',
@@ -158,7 +158,7 @@ export function templateRoot(moduleUrl: string): string {
  *
  * That matters most with `--force`, which is how someone lands here with a
  * directory that already has content. Clobbering would destroy exactly the files
- * you cannot get back: `.dev.vars` holds a key the platform will not show again,
+ * you cannot get back: `.env.local` (or `.dev.vars`) holds a key the platform will not show again,
  * and `marcapony.json` holds the app slug `marcapony app link` wrote. Filling in
  * only what is missing is both safer and the more useful meaning of --force.
  */

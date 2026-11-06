@@ -1,6 +1,6 @@
 import { fetchCapabilities } from './api.js'
 import { renderAgents } from './agents.js'
-import { readConfig, resolveApiKey, resolveApiRoot } from './config.js'
+import { envFileOf, readConfig, resolveApiKey, resolveApiRoot } from './config.js'
 
 export interface GuideOptions {
   cwd: string
@@ -21,11 +21,12 @@ export async function runGuide(options: GuideOptions): Promise<void> {
   const log = options.log ?? console.log
   const apiRoot = resolveApiRoot(options.cliEnv)
   const apiKey = resolveApiKey(options.cwd, options.env)
-  const appName = readConfig(options.cwd)?.app ?? 'your app'
+  const config = readConfig(options.cwd)
+  const appName = config?.app ?? 'your app'
 
   const capabilities = apiKey
     ? await fetchCapabilities(apiRoot, apiKey, options.fetchImpl ?? fetch)
     : []
 
-  log(renderAgents({ appName, capabilities }))
+  log(renderAgents({ appName, capabilities, envFile: envFileOf(options.cwd, config) }))
 }

@@ -67,7 +67,7 @@ function cliConfigKeys(): Set<string> {
   const source = readFileSync(new URL('../../../cli/src/config.ts', import.meta.url), 'utf8')
   const body = /export interface MarcaponyConfig \{([\s\S]*?)\n\}/.exec(source)?.[1]
   if (!body) throw new Error('MarcaponyConfig not found in cli/src/config.ts')
-  return new Set([...body.matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]!))
+  return new Set([...body.matchAll(/^ {2}([\w$]+)\??:/gm)].map((m) => m[1]!))
 }
 
 interface TemplateConfig {
@@ -106,7 +106,7 @@ describe.each(NAMES as TemplateName[])('the %s template', (name) => {
     for (const file of [
       'package.json',
       '.gitignore',
-      '.dev.vars.example',
+      '.env.local.example',
       'index.html',
       'tsconfig.json',
       'vite.config.ts',

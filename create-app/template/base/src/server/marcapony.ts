@@ -6,7 +6,7 @@ import { createClient, MarcaponyError, type Identity } from 'marcapony-sdk'
  * ends up read from the wrong place, or bundled into the browser.
  */
 export interface MarcaponyBindings {
-  /** Scoped app key (`mpk_...`). Written into `.dev.vars` by `bun run link`. */
+  /** Scoped app key (`mpk_...`). Written into `.env.local` by `bun run link`. */
   MARCAPONY_API_KEY?: string
   /** API root. Also written by `bun run link`; the SDK defaults to production. */
   MARCAPONY_API_URL?: string
@@ -28,7 +28,7 @@ export type Marcapony = ReturnType<typeof createClient>
 export function marcaponyFromEnv(env: MarcaponyBindings): Marcapony {
   if (!env.MARCAPONY_API_KEY) {
     throw new Error(
-      'MARCAPONY_API_KEY is missing. Run `bun run link` in this project. It writes the key into .dev.vars for you.',
+      'MARCAPONY_API_KEY is missing. Run `bun run link` in this project. It writes the key into .env.local for you.',
     )
   }
   return createClient({

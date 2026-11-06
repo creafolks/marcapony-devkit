@@ -20,9 +20,15 @@ export const AGENTS_END = '<!-- marcapony:end -->'
 export interface RenderAgentsOptions {
   appName: string
   capabilities: Capability[]
+  /** The local file `link` wrote the key into. */
+  envFile?: string
 }
 
-export function renderAgents({ appName, capabilities }: RenderAgentsOptions): string {
+export function renderAgents({
+  appName,
+  capabilities,
+  envFile = '.env.local',
+}: RenderAgentsOptions): string {
   const lines: string[] = [
     AGENTS_BEGIN,
     '',
@@ -32,12 +38,12 @@ export function renderAgents({ appName, capabilities }: RenderAgentsOptions): st
     '',
     '## Rules',
     `- Install the SDK if the project does not depend on it yet: \`npm install ${SDK_PACKAGE}\` (public npm, no auth needed).`,
-    '- The API key is in `.dev.vars` as `MARCAPONY_API_KEY`. Never commit it and never expose it to the client — use it only in server-side code.',
+    `- The API key is in \`${envFile}\` as \`MARCAPONY_API_KEY\`. Never commit it and never expose it to the client — use it only in server-side code.`,
     '- Create the client on the server, passing BOTH values — without `baseUrl` the SDK defaults to production and ignores the URL that was written for you:',
     '  ```ts',
     `  import { createClient } from '${SDK_PACKAGE}'`,
     '  const mp = createClient({',
-    '    apiKey: env.MARCAPONY_API_KEY, // env on Workers, process.env in Node',
+    '    apiKey: env.MARCAPONY_API_KEY, // the `env` your fetch handler receives',
     '    baseUrl: env.MARCAPONY_API_URL,',
     '    appId: env.MARCAPONY_APP_ID, // set at deploy; needed by identity()',
     '  })',
@@ -48,9 +54,11 @@ export function renderAgents({ appName, capabilities }: RenderAgentsOptions): st
     '- An empty list is a valid answer. A new account has no products, customers or submissions yet; do not treat that as a failure or build an interface that assumes data exists.',
     "- Anything shown to a signed-in visitor (portal apps) must use `mp.forRequest(request)` and its `me.*` calls, never the account-wide client: the account-wide key returns every customer's records. Read who is signed in with `identity(request)` from the SDK (display and hiding buttons only; the platform enforces access). Never read, parse or forward the portal session cookie or the `x-marcapony-identity` header yourself, and never log it.",
     '- Every app has a data access mode (`dataAccess` in `marcapony.json`, set in the dashboard). Unless it is `account`, the plain client cannot read customers, reservations, orders, payment links or form entries: those calls answer 403 `identity_required`. It can still read the catalog and book or send a form for an anonymous visitor. Do not try to work around this; customer data goes through `mp.forRequest(request)`. A deploy can only narrow the mode, never widen it.',
-    '- Create `mp.forRequest(request)` per request and never keep it, or anything it returned, in module scope or a global cache: one worker serves many visitors, and a cached answer would be shown to the next one.',
+    '- Create `mp.forRequest(request)` per request and never keep it, or anything it returned, in module scope or a global cache: one server instance serves many visitors, and a cached answer would be shown to the next one.',
     "- A team tool (opened by a team member from the dashboard) gets an identity with `kind: 'member'`. Make its calls through `mp.forRequest(request).reservations`, `.orders` and `.customers` so the member's own role limits them; `me.*` is for customers only. When `identity(request).preview` is true, writes are simulated: show a banner instead of claiming the change was saved.",
-    '- Deploy with `npx marcapony app deploy`. Never run wrangler or git deploy commands.',
+    '- Deploy only with `npx marcapony app deploy`. No other deploy tool applies to this project. Before deploying in a project others also work on, run `npx marcapony app pull`; a deploy stops with exit code 2 when someone deployed after your last sync.',
+    '- Settings and secrets the app needs go in `env` in `marcapony.json` and are set with `npx marcapony app env set NAME` (never in the code). The app reads them from the `env` its fetch handler receives.',
+    '- The app runs in the Marcapony runtime: a standard fetch handler, no file system at request time, limited CPU time per request. Prefer web APIs (fetch, Request, Response, crypto) over Node built-ins.',
     '',
     '## Available operations',
     '',

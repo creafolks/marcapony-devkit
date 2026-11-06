@@ -38,18 +38,48 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function makeFetch(responses: Response[]): {
+/**
+ * Answers in order from `responses`. The sync routes
+ * (source-head, validate, grant close) answer from `routes` instead and are not
+ * recorded in `calls`; by default they behave like a platform older than the
+ * sync rule (404), so these tests cover the deploy as it was.
+ */
+function makeFetch(
+  responses: Response[],
+  routes: Record<string, () => Response> = {},
+): {
   fetch: typeof fetch
   calls: Array<{ url: string; init: RequestInit }>
+  syncCalls: Array<{ url: string; init: RequestInit }>
 } {
   const calls: Array<{ url: string; init: RequestInit }> = []
+  const syncCalls: Array<{ url: string; init: RequestInit }> = []
+  const defaults: Record<string, () => Response> = {
+    '/source-head': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/validate': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/close': () => jsonResponse({ data: { outcome: 'ok', headAfter: null } }),
+  }
   const impl = (async (url: string | URL | Request, init?: RequestInit) => {
-    calls.push({ url: String(url), init: init ?? {} })
+    const u = String(url)
+    const route = Object.entries({ ...defaults, ...routes }).find(([suffix]) => u.endsWith(suffix))
+    if (route) {
+      syncCalls.push({ url: u, init: init ?? {} })
+      return route[1]()
+    }
+    calls.push({ url: u, init: init ?? {} })
     const next = responses.shift()
     if (!next) throw new Error('unexpected extra request')
     return next
   }) as typeof fetch
-  return { fetch: impl, calls }
+  return { fetch: impl, calls, syncCalls }
+}
+
+/** A version 1 manifest, as projects linked before version 2 have. */
+const V1 = {
+  app: 'transfer-app',
+  build: 'echo build',
+  worker: 'dist/index.js',
+  assets: 'dist/client',
 }
 
 let dir: string
@@ -176,7 +206,7 @@ describe('assets ignore', () => {
 })
 
 describe('runLink', () => {
-  it('writes the key into .dev.vars and creates marcapony.json', async () => {
+  it('keeps an existing .dev.vars and creates a version 2 marcapony.json', async () => {
     writeFileSync(join(dir, '.dev.vars'), 'EXISTING=1\n')
     const { fetch: fetchImpl, calls } = makeFetch([
       jsonResponse({
@@ -209,7 +239,10 @@ describe('runLink', () => {
     const config = JSON.parse(readFileSync(join(dir, 'marcapony.json'), 'utf8'))
     expect(config.app).toBe('transfer-app')
     expect(config.build).toBe('bun run build')
-    expect(config.worker).toBe('dist/index.js')
+    expect(config.manifest).toBe(2)
+    expect(config.server).toBe('dist/server/index.js')
+    expect(config.runtime).toBe('2026-10')
+    expect(config.worker).toBeUndefined()
 
     // AGENTS.md is written with the app's scope-filtered operations.
     const agents = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
@@ -260,7 +293,7 @@ describe('runLink', () => {
   // .dev.vars holds a live key with the app's data scopes plus apps:deploy;
   // linking inside a project that never ignored it would publish the tenant's
   // credential on the next commit.
-  it('ignores .dev.vars before writing the key', async () => {
+  it('writes the key into .env.local and ignores it first', async () => {
     const { fetch: fetchImpl } = makeFetch([
       jsonResponse({
         appSlug: 'transfer-app',
@@ -280,7 +313,11 @@ describe('runLink', () => {
       log: () => {},
     })
 
-    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toContain('.dev.vars')
+    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toContain('.env.local')
+    expect(parseEnvLines(readFileSync(join(dir, '.env.local'), 'utf8')).MARCAPONY_API_KEY).toBe(
+      'mpk_secret',
+    )
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf8')).toContain('`.env.local`')
   })
 
   it('does not duplicate an existing .dev.vars ignore entry', async () => {
@@ -329,7 +366,7 @@ describe('runLink', () => {
     })
 
     // The key + config still landed; AGENTS.md is simply skipped.
-    expect(parseEnvLines(readFileSync(join(dir, '.dev.vars'), 'utf8')).MARCAPONY_API_KEY).toBe(
+    expect(parseEnvLines(readFileSync(join(dir, '.env.local'), 'utf8')).MARCAPONY_API_KEY).toBe(
       'mpk_secret',
     )
     expect(existsSync(join(dir, 'AGENTS.md'))).toBe(false)
@@ -643,14 +680,14 @@ describe('source push', () => {
 
   it('collects source honouring built-in excludes, build outputs and .gitignore', () => {
     scaffold()
-    const files = collectSourceFiles(dir, { worker: 'dist/index.js', assets: 'dist/client' })
+    const files = collectSourceFiles(dir, V1)
     expect(files).toEqual(['.gitignore', 'marcapony.json', 'package.json', 'src/app.ts'])
   })
 
   it('stops at the file and size caps', () => {
     scaffold()
     writeFileSync(join(dir, 'huge.bin'), Buffer.alloc(MAX_SOURCE_BYTES + 1))
-    expect(() => collectSourceFiles(dir, { worker: 'dist/index.js' })).toThrow(SourceTooLargeError)
+    expect(() => collectSourceFiles(dir, { ...V1, assets: undefined })).toThrow(SourceTooLargeError)
   })
 
   it('finds known key formats without returning the value', () => {
@@ -805,7 +842,7 @@ describe('source push', () => {
     for (const name of ['.dev.vars.production', '.npmrc', '.netrc', 'id_ed25519', 'cert.p12']) {
       writeFileSync(join(dir, name), 'secret')
     }
-    const files = collectSourceFiles(dir, { worker: 'dist/index.js', assets: 'dist/client' })
+    const files = collectSourceFiles(dir, V1)
     expect(files).toEqual(['.gitignore', 'marcapony.json', 'package.json', 'src/app.ts'])
   })
 
@@ -896,36 +933,64 @@ describe('source push', () => {
     expect(logs.join('\n')).not.toContain('sk_live_abc')
   })
 
-  it('configures origin before fetching, so the commit can build on the remote branch', async () => {
+  it('configures origin before fetching the base, and fails closed when the fetch fails', async () => {
     scaffold()
     const git = (await import('isomorphic-git')).default
     const seen: Array<{ url: unknown; refspec: unknown }> = []
-    await pushSource({
-      cwd: dir,
-      files: ['package.json'],
-      grant: GRANT,
-      fetch: (async (o: { fs: never; gitdir: string }) => {
-        seen.push({
-          url: await git.getConfig({ fs: o.fs, gitdir: o.gitdir, path: 'remote.origin.url' }),
-          refspec: await git.getConfig({ fs: o.fs, gitdir: o.gitdir, path: 'remote.origin.fetch' }),
-        })
-        throw new Error('empty remote')
-      }) as never,
-      push: (async () => ({ ok: true, error: null, refs: {} })) as never,
-    })
+    let pushed = false
+    await expect(
+      pushSource({
+        cwd: dir,
+        files: ['package.json'],
+        grant: GRANT,
+        parent: 'a'.repeat(40),
+        fetch: (async (o: { fs: never; gitdir: string }) => {
+          seen.push({
+            url: await git.getConfig({ fs: o.fs, gitdir: o.gitdir, path: 'remote.origin.url' }),
+            refspec: await git.getConfig({
+              fs: o.fs,
+              gitdir: o.gitdir,
+              path: 'remote.origin.fetch',
+            }),
+          })
+          throw new Error('network down')
+        }) as never,
+        push: (async () => {
+          pushed = true
+          return { ok: true, error: null, refs: {} }
+        }) as never,
+      }),
+    ).rejects.toThrow('network down')
     expect(seen).toEqual([{ url: GRANT.remote, refspec: '+refs/heads/*:refs/remotes/origin/*' }])
+    expect(pushed).toBe(false)
   })
 
-  it('commits locally in a temp gitdir and pushes on top of the remote branch', async () => {
+  it('turns a non-fast-forward rejection into "pull first"', async () => {
+    scaffold()
+    await expect(
+      pushSource({
+        cwd: dir,
+        files: ['package.json'],
+        grant: GRANT,
+        parent: null,
+        push: (async () => {
+          throw Object.assign(new Error('rejected'), { code: 'PushRejectedError' })
+        }) as never,
+      }),
+    ).rejects.toThrow('marcapony app pull')
+  })
+
+  it('commits locally in a temp gitdir and pushes the first commit of a branch', async () => {
     scaffold()
     const pushes: Array<Record<string, unknown>> = []
     const oid = await pushSource({
       cwd: dir,
       files: ['src/app.ts', 'package.json'],
       grant: GRANT,
+      parent: null,
       message: 'first',
       fetch: (async () => {
-        throw new Error('empty remote')
+        throw new Error('a first push never fetches')
       }) as never,
       push: (async (o: Record<string, unknown>) => {
         pushes.push(o)

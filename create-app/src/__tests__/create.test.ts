@@ -118,7 +118,7 @@ describe('copyTemplate', () => {
   it('ships a .gitignore that already covers the key file', () => {
     const target = join(tempDir(), 'app')
     scaffoldTemplate(templateRoot(MODULE_URL), 'blank', target)
-    expect(readFileSync(join(target, '.gitignore'), 'utf8')).toContain('.dev.vars')
+    expect(readFileSync(join(target, '.gitignore'), 'utf8')).toContain('.env.local')
   })
 
   it('points the template at the published SDK, not a private one', () => {
@@ -137,8 +137,10 @@ describe('copyTemplate', () => {
       unknown
     >
     expect(config.bindings).toBeUndefined()
-    expect(config.worker).toBe('dist/worker/index.js')
-    expect(config.assets).toBe('dist/client')
+    expect(config.manifest).toBe(2)
+    expect(config.server).toBe('dist/server/index.js')
+    expect(config.public).toEqual({ dir: 'dist/client' })
+    expect(config.compatibilityDate).toBeUndefined()
   })
 
   it('ships no wrangler config or dependency', () => {
@@ -243,7 +245,7 @@ describe('commands shown to the user', () => {
       HELP,
       nextSteps('app'),
       readFileSync(join(target, 'README.md'), 'utf8'),
-      readFileSync(join(target, '.dev.vars.example'), 'utf8'),
+      readFileSync(join(target, '.env.local.example'), 'utf8'),
       readFileSync(join(target, 'scripts/dev.ts'), 'utf8'),
       readFileSync(join(target, 'src/server/marcapony.ts'), 'utf8'),
       readFileSync(new URL('../../README.md', import.meta.url), 'utf8'),

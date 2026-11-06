@@ -8,7 +8,14 @@ const ASSETS_IGNORE_FILE = '.assetsignore'
  * `.dev.vars` holds the app's Marcapony key — serving it would publish the
  * credential the platform just injected.
  */
-const ALWAYS_IGNORED = [ASSETS_IGNORE_FILE, '.dev.vars', 'wrangler.json', 'wrangler.jsonc']
+const ALWAYS_IGNORED = [
+  ASSETS_IGNORE_FILE,
+  '.dev.vars',
+  '.env',
+  '.env.local',
+  'wrangler.json',
+  'wrangler.jsonc',
+]
 
 export function parseAssetsIgnore(content: string): string[] {
   return (
@@ -79,10 +86,18 @@ export function contentTypeFor(filePath: string): string {
  * honouring `.assetsignore` so build output that must never be served (a
  * stray `.dev.vars`, a wrangler config) is not published.
  */
-export function collectAssets(root: string): CollectedAsset[] {
+export function collectAssets(
+  root: string,
+  /** Version 2: `public.ignore` from marcapony.json, which replaces `.assetsignore`. */
+  ignore?: string[],
+): CollectedAsset[] {
   const out: CollectedAsset[] = []
   const ignorePath = join(root, ASSETS_IGNORE_FILE)
-  const patterns = existsSync(ignorePath) ? parseAssetsIgnore(readFileSync(ignorePath, 'utf8')) : []
+  const patterns = ignore
+    ? parseAssetsIgnore(ignore.join('\n'))
+    : existsSync(ignorePath)
+      ? parseAssetsIgnore(readFileSync(ignorePath, 'utf8'))
+      : []
 
   const walk = (dir: string, prefix: string): void => {
     for (const entry of readdirSync(dir)) {

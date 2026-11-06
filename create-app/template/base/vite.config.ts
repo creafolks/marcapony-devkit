@@ -10,7 +10,7 @@ export default defineConfig({
   },
   server: {
     // `bun run dev` serves the Hono app on 8787; in production the platform
-    // routes /api/* to the worker instead (see run_worker_first).
+    // routes /api/* to the server instead (see routes.server in marcapony.json).
     proxy: { '/api': 'http://localhost:8787' },
   },
 })

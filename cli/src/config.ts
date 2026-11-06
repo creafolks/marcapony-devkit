@@ -7,16 +7,33 @@ import { join } from 'node:path'
  * which app, how to build, and what to upload.
  */
 export interface MarcaponyConfig {
+  /** Editor completion for the fields; ignored by the CLI. */
+  $schema?: string
+  /** The format version: 2, or absent for the first format. */
+  manifest?: 2
   /** App slug, as issued by the platform. */
   app: string
   /** Build command run before bundling (e.g. `bun run build`). */
   build: string
-  /** Path to the built ES module worker entry. */
-  worker: string
-  /** Optional directory of static assets served alongside the worker. */
+  /** The built server module, exporting `{ fetch(request, env, ctx) }`. Version 2. */
+  server?: string
+  /** The built public files, and files in it that are never uploaded. Version 2. */
+  public?: { dir?: string; ignore?: string[] }
+  /** Paths that always reach the server, and what a missing page serves. Version 2. */
+  routes?: { server?: string[]; notFound?: 'spa' | 'page' | 'none' }
+  /** The Marcapony runtime version, `YYYY-MM`. Version 2. */
+  runtime?: string
+  /** Files never saved with the source, in gitignore syntax (`!` re-includes). Version 2. */
+  ignore?: string[]
+  /** The settings and secrets the app needs, set per environment. Version 2. */
+  env?: Record<string, { secret?: boolean; required?: boolean; description?: string }>
+  /** Version 1: the built server module. */
+  worker?: string
+  /** Version 1: the built public files. */
   assets?: string
-  /** Passed through to the platform as the Workers assets config. */
+  /** Version 1: static file behaviour, replaced by `routes` in version 2. */
   assetsConfig?: Record<string, unknown>
+  /** Version 1: replaced by `runtime` in version 2. */
   compatibilityDate?: string
   compatibilityFlags?: string[]
   /**
@@ -53,8 +70,49 @@ export interface MarcaponyConfig {
 }
 
 export const CONFIG_FILE = 'marcapony.json'
-export const ENV_FILE = '.dev.vars'
+/** Where `link` writes the key for a version 2 project. */
+export const ENV_FILE = '.env.local'
+/** Where version 1 projects keep it; still read as a fallback. */
+export const LEGACY_ENV_FILE = '.dev.vars'
 export const GITIGNORE_FILE = '.gitignore'
+
+/** Where the build puts the server and the public files, unless the manifest says otherwise. */
+export const MANIFEST_DEFAULTS = {
+  server: 'dist/server/index.js',
+  publicDir: 'dist/client',
+} as const
+
+/** The newest Marcapony runtime version; new projects pin it. */
+export const NEWEST_RUNTIME = '2026-10'
+export const SCHEMA_REF = './node_modules/marcapony/manifest.schema.json'
+
+export function isManifestV2(config: Pick<MarcaponyConfig, 'manifest'>): boolean {
+  return config.manifest === 2
+}
+
+/** The built server module, for either format. */
+export function serverPathOf(config: MarcaponyConfig): string {
+  if (isManifestV2(config)) return config.server ?? MANIFEST_DEFAULTS.server
+  return config.worker ?? MANIFEST_DEFAULTS.server
+}
+
+/** The built public files directory, if the app has one. */
+export function publicDirOf(config: MarcaponyConfig, cwd?: string): string | undefined {
+  if (!isManifestV2(config)) return config.assets
+  if (config.public?.dir) return config.public.dir
+  return cwd && existsSync(join(cwd, MANIFEST_DEFAULTS.publicDir))
+    ? MANIFEST_DEFAULTS.publicDir
+    : undefined
+}
+
+/** The local file the key lives in: the v2 name, or the v1 one where that is what the project has. */
+export function envFileOf(cwd: string, config: Pick<MarcaponyConfig, 'manifest'> | null): string {
+  if (config && !isManifestV2(config)) return LEGACY_ENV_FILE
+  if (!existsSync(join(cwd, ENV_FILE)) && existsSync(join(cwd, LEGACY_ENV_FILE))) {
+    return LEGACY_ENV_FILE
+  }
+  return ENV_FILE
+}
 
 /**
  * The CLI targets one of a fixed set of known API roots. Production is the
@@ -134,13 +192,13 @@ export function writeConfig(cwd: string, config: MarcaponyConfig): void {
   writeFileSync(join(cwd, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`)
 }
 
-export function readEnvFile(cwd: string): string {
-  const path = join(cwd, ENV_FILE)
+export function readEnvFile(cwd: string, file: string = ENV_FILE): string {
+  const path = join(cwd, file)
   return existsSync(path) ? readFileSync(path, 'utf8') : ''
 }
 
-export function writeEnvFile(cwd: string, content: string): void {
-  writeFileSync(join(cwd, ENV_FILE), content)
+export function writeEnvFile(cwd: string, content: string, file: string = ENV_FILE): void {
+  writeFileSync(join(cwd, file), content)
 }
 
 /**
@@ -150,36 +208,44 @@ export function writeEnvFile(cwd: string, content: string): void {
  * ignore it before the key is written rather than trusting a scaffold to have
  * done it. Returns true when this call added the entry.
  */
-export function ensureEnvFileIgnored(cwd: string): boolean {
+export function ensureEnvFileIgnored(cwd: string, file: string = ENV_FILE): boolean {
   const path = join(cwd, GITIGNORE_FILE)
   const current = existsSync(path) ? readFileSync(path, 'utf8') : ''
   const alreadyIgnored = current
     .split('\n')
     .map((line) => line.trim())
-    .some((line) => line === ENV_FILE || line === `/${ENV_FILE}`)
+    .some(
+      (line) =>
+        line === file || line === `/${file}` || (file.startsWith('.env') && line === '.env*'),
+    )
   if (alreadyIgnored) return false
 
   const separator = current.length === 0 || current.endsWith('\n') ? '' : '\n'
-  writeFileSync(path, `${current}${separator}${ENV_FILE}\n`)
+  writeFileSync(path, `${current}${separator}${file}\n`)
   return true
 }
 
 /**
  * The deploy credential: an exported env var wins (CI), otherwise the key
- * `marcapony app link` wrote into `.dev.vars`.
+ * `marcapony app link` wrote into `.env.local` (or `.dev.vars` in a project
+ * linked before version 2).
  */
 export function resolveApiKey(cwd: string, env: NodeJS.ProcessEnv): string | null {
   if (env.MARCAPONY_API_KEY) return env.MARCAPONY_API_KEY
-  return parseEnvLines(readEnvFile(cwd)).MARCAPONY_API_KEY ?? null
+  return (
+    parseEnvLines(readEnvFile(cwd, ENV_FILE)).MARCAPONY_API_KEY ??
+    parseEnvLines(readEnvFile(cwd, LEGACY_ENV_FILE)).MARCAPONY_API_KEY ??
+    null
+  )
 }
 
 /**
- * Best-effort defaults for a fresh link: the worker entry from a wrangler
+ * Best-effort defaults for a fresh link: the server entry from a wrangler
  * config when one exists (it is dev plumbing here, never a deploy path), and
- * `dist/client` as the assets dir when present.
+ * the public files directory when the build already made it.
  */
-export function detectDefaults(cwd: string): { worker: string; assets?: string } {
-  let worker = 'dist/index.js'
+export function detectDefaults(cwd: string): { server: string; publicDir?: string } {
+  let server: string = MANIFEST_DEFAULTS.server
   for (const name of ['wrangler.jsonc', 'wrangler.json']) {
     const path = join(cwd, name)
     if (!existsSync(path)) continue
@@ -187,10 +253,12 @@ export function detectDefaults(cwd: string): { worker: string; assets?: string }
     // commas, and a config read must never be the thing that fails a link.
     const match = readFileSync(path, 'utf8').match(/"main"\s*:\s*"([^"]+)"/)
     if (match?.[1]) {
-      worker = match[1].replace(/^\.\//, '')
+      server = match[1].replace(/^\.\//, '')
       break
     }
   }
-  const assets = existsSync(join(cwd, 'dist/client')) ? 'dist/client' : undefined
-  return assets ? { worker, assets } : { worker }
+  const publicDir = existsSync(join(cwd, MANIFEST_DEFAULTS.publicDir))
+    ? MANIFEST_DEFAULTS.publicDir
+    : undefined
+  return publicDir ? { server, publicDir } : { server }
 }

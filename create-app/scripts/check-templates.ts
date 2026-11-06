@@ -1,7 +1,7 @@
 /**
  * `bun run check:templates` — scaffolds every template into a temporary
  * directory and proves it compiles: `tsc --noEmit` over the whole project and
- * the worker bundle from its own `build:worker` script. The SDK is resolved
+ * the server bundle from its own `build:server` script. The SDK is resolved
  * from this repository's `sdk/` build, so a template cannot drift from the SDK
  * it ships with. Too slow for the unit suite (it installs the template's
  * dependencies once), so CI runs it as its own step.
@@ -71,7 +71,7 @@ try {
   symlinkSync(SDK_DIR, join(work, 'node_modules', 'marcapony-sdk'), 'dir')
 
   const bin = (name: string) => join(work, 'node_modules', '.bin', name)
-  const workerArgs = manifest.scripts['build:worker']!.split(' ').slice(1)
+  const workerArgs = manifest.scripts['build:server']!.split(' ').slice(1)
 
   for (const { name } of TEMPLATES) {
     const dir = join(work, name)
