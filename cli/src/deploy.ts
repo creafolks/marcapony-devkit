@@ -37,6 +37,7 @@ import {
   scanForSecrets,
   type PushSourceOptions,
 } from './source.js'
+import { formatSourceUsage, isOverSourceLimit } from './usage.js'
 
 export interface DeployOptions {
   cwd: string
@@ -150,6 +151,14 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     fetchImpl,
   )
 
+  // The repo was over its limit when last measured: deploys with source are
+  // refused until it is back under, so say it before the build.
+  if (sourceFiles && isOverSourceLimit(sync?.sourceUsage)) {
+    log(
+      `Warning: ${formatSourceUsage(sync!.sourceUsage!)}. Deploys that save source are refused until large files are removed; push a version without them, or deploy with --no-source.`,
+    )
+  }
+
   // 3. The build. No credential of ours exists in the process yet.
   log(`Building: ${config.build}`)
   ;(options.runBuild ?? defaultRunBuild)(config.build, options.cwd)
@@ -201,19 +210,31 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   if (source && sync?.environmentId) writeBase(options.cwd, sync.environmentId, source.commit)
 
   // 5. Deploy. The server checks the claim again, for every CLI version.
-  let deployment = await createDeployment(
-    apiRoot,
-    apiKey,
-    {
-      worker: { main: 'index.js', content: worker, encoding: 'base64' },
-      ...(assets ? { assets } : {}),
-      ...runtimeFieldsOf(config),
-      ...(source ? { source } : {}),
-      ...(base !== undefined ? { baseSourceRef: base } : {}),
-      ...(force ? { force: true } : {}),
-    },
-    fetchImpl,
-  )
+  let deployment: DeploymentView
+  try {
+    deployment = await createDeployment(
+      apiRoot,
+      apiKey,
+      {
+        worker: { main: 'index.js', content: worker, encoding: 'base64' },
+        ...(assets ? { assets } : {}),
+        ...runtimeFieldsOf(config),
+        ...(source ? { source } : {}),
+        ...(base !== undefined ? { baseSourceRef: base } : {}),
+        ...(force ? { force: true } : {}),
+      },
+      fetchImpl,
+      options.sleep,
+    )
+  } catch (err) {
+    if (err instanceof CliError && err.code === 'source_quota_exceeded') {
+      throw new CliError(
+        `${err.message}. The app's Code tab in the dashboard shows the repo's size.`,
+        { code: err.code, status: err.status },
+      )
+    }
+    throw err
+  }
 
   // 6. The new base: the pushed commit, or the head we deployed on top of.
   if (sync?.environmentId) {
@@ -434,6 +455,8 @@ async function trySourcePush(args: {
       }
     }
     log(`Source saved: commit ${shortCommit(commit)} (${files.length} file(s))`)
+    // As last measured, before this push; the platform measures again after its scan.
+    if (grant.sourceUsage) log(formatSourceUsage(grant.sourceUsage))
     const message = options.message?.trim()
     return {
       commit,

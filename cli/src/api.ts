@@ -65,6 +65,15 @@ export interface DeploymentSource {
   grantId?: string
 }
 
+/** The source repo's working set against its limit, as last measured by the platform. */
+export interface SourceUsage {
+  usedBytes: number
+  limitBytes: number
+  /** Every blob the repo ever held, reachable or not; approximate. */
+  historyBytes: number
+  measuredAt: string
+}
+
 export interface SourceGrant {
   repoName: string
   remote: string
@@ -74,9 +83,11 @@ export interface SourceGrant {
   /** Absent on platforms older than push grants. */
   grantId?: string
   headBefore?: string | null
+  /** Absent on platforms older than the source quota; null until first measured. */
+  sourceUsage?: SourceUsage | null
 }
 
-export type SourceReadGrant = Omit<SourceGrant, 'grantId' | 'headBefore'>
+export type SourceReadGrant = Omit<SourceGrant, 'grantId' | 'headBefore' | 'sourceUsage'>
 
 export interface SourceHead {
   /** False when the platform does not store source for this environment. */
@@ -91,6 +102,8 @@ export interface SourceHead {
   movedBy: { name: string | null; version: number; at: string; forced: boolean } | null
   /** Old commit -> new commit, after the platform rewrote history. */
   rewrites: Record<string, string>
+  /** Absent on platforms older than the source quota; null until first measured. */
+  sourceUsage?: SourceUsage | null
 }
 
 /**
@@ -190,19 +203,34 @@ export async function exchangeCode(
   return (await res.json()) as LinkResponse
 }
 
+/**
+ * Create the deployment. While the platform re-measures a source repo that
+ * was over its limit (409 source_quota_pending, typically right after the push
+ * that removed the large file), it waits as told by Retry-After, for up to a
+ * minute in all.
+ */
 export async function createDeployment(
   apiRoot: string,
   apiKey: string,
   payload: DeploymentRequest,
   fetchImpl: typeof fetch = fetch,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<DeploymentView> {
-  const res = await fetchImpl(`${apiRoot}/ext/v1/deployments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw await failure(res)
-  return ((await res.json()) as { data: DeploymentView }).data
+  let waited = 0
+  for (;;) {
+    const res = await fetchImpl(`${apiRoot}/ext/v1/deployments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(payload),
+    })
+    if (res.ok) return ((await res.json()) as { data: DeploymentView }).data
+    const error = await failure(res)
+    if (error.code !== 'source_quota_pending' || waited >= 60_000) throw error
+    const seconds = Number(res.headers.get('Retry-After') ?? '10')
+    const ms = Math.min(Math.max(Number.isFinite(seconds) ? seconds : 10, 1), 30) * 1000
+    await sleep(ms)
+    waited += ms
+  }
 }
 
 export async function fetchDeployment(
