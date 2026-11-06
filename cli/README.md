@@ -43,6 +43,26 @@ It also creates `marcapony.json`:
 An existing `marcapony.json` is never overwritten — only missing fields are
 filled in.
 
+### Keys and renewal
+
+A key lasts 90 days. Linking again with a new pairing code renews it: the new
+key is written first, then your earlier key for the same environment is
+revoked, so a project never holds more than one live key of yours. Keys made by
+teammates are not touched. From 14 days before the expiry, every deploy prints
+a warning with the command to run.
+
+For a CI pipeline, link with `--ci`:
+
+```bash
+npx marcapony app link --code mpl_… --ci
+```
+
+The key is labelled "CI" in the dashboard and linking it revokes nothing, so
+several pipelines can each have one. Store it in the pipeline's secret store as
+`MARCAPONY_API_KEY` and remove it from your machine. The app's page in the
+dashboard lists every CLI key of the environment, who made it, when it was last
+used and when it expires, and revokes any of them.
+
 ## `marcapony app deploy`
 
 ```bash
@@ -83,8 +103,19 @@ if it fails, the deploy still goes live.
 - Files ignored by `.gitignore` or `ignore` in `marcapony.json`, `node_modules`,
   the build output and credential files (`.env.local`, `.dev.vars`, keys) are
   never sent.
-- If a scan finds something that looks like a secret key, the source is not
-  saved and the CLI names the file and line (never the value).
+- Before saving, the files are scanned for secrets: API keys of common
+  providers (payment, cloud, AI, source hosting), private keys, tokens with a
+  private role, and quoted high-entropy values assigned to names such as
+  `secret`, `token` or `password`. On a finding the source is not saved and the
+  CLI prints `path:line`, the rule and the first four characters of the value.
+  The deploy itself goes on.
+- A test value can be allowed with a `marcapony-scan: allow` comment on its
+  line or the line above. Allowed matches are still listed. Files named
+  `*.test.*` or under `__fixtures__/` are exempt from the high-entropy rule, never
+  from the provider patterns. Marcapony scans the saved source again on its
+  side, where the comment only exempts the high-entropy rule.
+- `npx marcapony scan` runs the same scan alone over the same files, for a
+  pre-commit hook or a CI step.
 - `--message <text>` stores a version message with the saved source.
 - `--no-source` skips saving for one deploy. Set `MARCAPONY_SOURCE_PUSH=0` to
   skip it every time.
@@ -151,6 +182,7 @@ to stderr). Commands never wait for input without a terminal. Exit codes:
 | 3    | A pull left conflicts to resolve                       |
 | 4    | Refused by Marcapony; the message says why             |
 | 5    | The project is not linked                              |
+| 6    | `marcapony scan` found possible secrets                |
 
 ## Configuration reference
 
@@ -199,6 +231,7 @@ supplied key already reaches.
 | Flag               | Meaning                                               |
 | ------------------ | ----------------------------------------------------- |
 | `--code <code>`    | Pairing code (link only; prompted when omitted)       |
+| `--ci`             | Make a key for a CI pipeline (link only)              |
 | `--cwd <dir>`      | Project directory (defaults to the current directory) |
 | `--message <text>` | Version message saved with the source (deploy only)   |
 | `--no-source`      | Do not save the project source with this deploy       |
