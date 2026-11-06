@@ -19,7 +19,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "dir": { "type": "string", "default": "dist/client", "description": "The built public files." },
+        "dir": {
+          "type": "string",
+          "default": "dist/client",
+          "description": "The built public files."
+        },
         "ignore": {
           "type": "array",
           "items": { "type": "string" },
