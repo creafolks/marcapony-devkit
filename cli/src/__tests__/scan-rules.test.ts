@@ -152,3 +152,12 @@ describe('helpers', () => {
     expect(isUnscannable('ok', 2)).toBe(false)
   })
 })
+
+describe('long lines', () => {
+  it('a long line of name characters is scanned quickly', () => {
+    const line = `${'a'.repeat(200_000)}token = "x"`
+    const started = performance.now()
+    scanText('bundle.js', line, { side: 'server' })
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+})

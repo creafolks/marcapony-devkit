@@ -171,7 +171,7 @@ const PUBLIC_JWT_ROLES = new Set(['anon', 'anonymous', 'authenticated', 'public'
 const GENERIC_RULE = {
   id: 'generic-secret',
   name: 'High-entropy secret assignment',
-  re: /([A-Za-z0-9_.-]*(?:secret|token|passw(?:or)?d|pwd|api[_-]?key|apikey|private[_-]?key|access[_-]?key|auth[_-]?key)[A-Za-z0-9_.-]*)["']?\s*[:=]\s*(["'\x60])([^"'\x60\s]{20,})\2/gi,
+  re: /([A-Za-z0-9_.-]{0,64}(?:secret|token|passw(?:or)?d|pwd|api[_-]?key|apikey|private[_-]?key|access[_-]?key|auth[_-]?key)[A-Za-z0-9_.-]{0,64})["']?\s*[:=]\s*(["'\x60])([^"'\x60\s]{20,})\2/gi,
   nameGroup: 1,
   valueGroup: 3,
 }

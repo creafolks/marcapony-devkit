@@ -71,6 +71,21 @@ describe('gitignore matcher', () => {
     ])
   })
 
+  it('dir/* and dir/** match what is inside dir, not dir itself, so ! can re-include', () => {
+    expect(ignored('logs/*', 'logs/')).toBe(false)
+    expect(ignored('logs/**', 'logs/')).toBe(false)
+    expect(ignored('logs/*', 'logs/a.txt')).toBe(true)
+    write('.gitignore', 'logs/*\n!logs/.gitkeep\n')
+    write('logs/.gitkeep', '')
+    write('logs/today.log')
+    write('src/app.ts')
+    expect(planSourceFiles(dir, { app: 'a', build: '' }).files).toEqual([
+      '.gitignore',
+      'logs/.gitkeep',
+      'src/app.ts',
+    ])
+  })
+
   it('a negation never brings back node_modules or a credential file', () => {
     write('.gitignore', '!node_modules/\n!.env\n')
     write('node_modules/x/index.js')

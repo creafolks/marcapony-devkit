@@ -109,16 +109,20 @@ export function parseIgnoreRules(content: string, source = '', base = ''): Ignor
     if (!line) continue
     const body = globToRegexSource(line)
     const prefix = anchored ? '^' : '^(?:.*/)?'
-    // A directory pattern matches the directory itself (tested as `dir/`).
-    const suffix = dirOnly ? '/$' : '/?$'
-    const re = new RegExp(`${prefix}${body}${suffix}`)
+    // Directories are tested as `dir/`. The pattern is matched against the path
+    // without that slash, so `dir/*` matches what is inside `dir` but not `dir`
+    // itself (as in git), and a later `!dir/keep` can still bring a file back.
+    const re = new RegExp(`${prefix}${body}$`)
     rules.push({
       negate,
       pattern,
       source,
       test: (path) => {
         if (prefixPath && !path.startsWith(prefixPath)) return false
-        return re.test(path.slice(prefixPath.length))
+        const isDir = path.endsWith('/')
+        if (dirOnly && !isDir) return false
+        const target = path.slice(prefixPath.length)
+        return re.test(isDir ? target.slice(0, -1) : target)
       },
     })
   }
