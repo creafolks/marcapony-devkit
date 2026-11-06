@@ -194,7 +194,19 @@ describe('marcapony app migrate-config', () => {
       'marcapony.json',
       JSON.stringify({ app: 'a', build: 'b', worker: 'w.js', compatibilityDate: '2025-05-10' }),
     )
-    runMigrateConfig({ cwd: dir, log: () => {} })
+    const result = runMigrateConfig({ cwd: dir, log: () => {} })
     expect(JSON.parse(readFileSync(join(dir, 'marcapony.json'), 'utf8')).runtime).toBe('2025-05')
+    expect(result.notes.some((n) => n.startsWith('Runtime date changes'))).toBe(false)
+  })
+
+  it('says when the runtime date changes', () => {
+    write(
+      'marcapony.json',
+      JSON.stringify({ app: 'a', build: 'b', worker: 'w.js', compatibilityDate: '2026-03-01' }),
+    )
+    const result = runMigrateConfig({ cwd: dir, log: () => {} })
+    expect(result.notes).toContain(
+      'Runtime date changes from 2026-03-01 to 2025-05-10 (runtime 2025-05). Test the app before deploying it.',
+    )
   })
 })

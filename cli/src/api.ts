@@ -288,9 +288,13 @@ export async function fetchSourceHead(
   const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/source-head`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
-  if (res.status === 404) return null
+  // A platform older than the route matches `GET /deployments/:id` instead and
+  // answers 400 or 404 for the non-id path; either means "no sync rule".
+  if (res.status === 400 || res.status === 404 || res.status === 405) return null
   if (!res.ok) throw await failure(res)
-  return ((await res.json()) as { data: SourceHead }).data
+  const data = ((await res.json()) as { data?: Partial<SourceHead> }).data
+  if (!data || typeof data.enabled !== 'boolean') return null
+  return data as SourceHead
 }
 
 /**

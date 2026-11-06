@@ -261,6 +261,56 @@ describe('runDeployDetailed with the sync rule', () => {
     expect((err as CliError).exitCode).toBe(EXIT.remoteChanges)
   })
 
+  it('on a platform without the sync rule pushes on top of the remote head, as 0.5 did', async () => {
+    const pushed: PushSourceOptions[] = []
+    const r = router({
+      // An older platform matches `GET /deployments/:id` and refuses the non-id path.
+      '/source-head': () => json({ error: { code: 'validation_failed', message: 'bad id' } }, 400),
+      '/validate': () => json({ error: { code: 'not_found', message: 'no route' } }, 404),
+      '/source-token': () =>
+        json({ data: { ...GRANT, grantId: undefined, headBefore: undefined } }, 201),
+      '/ext/v1/deployments': () => json(LIVE, 201),
+    })
+    await runDeployDetailed({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: r.fetch,
+      runBuild: () => {},
+      log: () => {},
+      pushSourceImpl: async (o) => {
+        pushed.push(o)
+        return sha('c')
+      },
+    })
+    expect(pushed).toHaveLength(1)
+    expect(pushed[0]?.parent).toBeUndefined()
+  })
+
+  it('records the pushed commit as the base even when the deploy then fails', async () => {
+    writeBase(dir, ENV_ID, sha('a'))
+    const r = router({
+      '/source-head': () => json({ data: headOf() }),
+      '/validate': () => json({ data: { ok: true } }),
+      '/source-token': () => json({ data: GRANT }, 201),
+      '/source-token/grant-1/close': () => json({ data: { outcome: 'ok', headAfter: sha('c') } }),
+      '/ext/v1/deployments': () =>
+        json({ error: { code: 'server_error', message: 'upload failed' } }, 500),
+    })
+    const err = await runDeployDetailed({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: r.fetch,
+      runBuild: () => {},
+      log: () => {},
+      pushSourceImpl: async () => sha('c'),
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    // The branch head is this project's own commit now; the next deploy must not stop on it.
+    expect(readBase(dir, ENV_ID)?.base).toBe(sha('c'))
+  })
+
   it('is refused as not linked with exit code 5', async () => {
     rmSync(join(dir, 'marcapony.json'))
     const err = await runDeployDetailed({ cwd: dir, env: {}, log: () => {} }).catch(

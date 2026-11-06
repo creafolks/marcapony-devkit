@@ -12,9 +12,9 @@ import {
 import { parseAssetsIgnore } from './assets.js'
 
 /** Runtime dates the first format used, mapped to the runtime version that keeps them. */
-const RUNTIME_BY_DATE: Array<{ fromDate: string; runtime: string }> = [
-  { fromDate: '2026-10-01', runtime: '2026-10' },
-  { fromDate: '0000-00-00', runtime: '2025-05' },
+const RUNTIME_BY_DATE: Array<{ fromDate: string; runtime: string; date: string }> = [
+  { fromDate: '2026-10-01', runtime: '2026-10', date: '2026-10-01' },
+  { fromDate: '0000-00-00', runtime: '2025-05', date: '2025-05-10' },
 ]
 
 const NOT_FOUND: Record<string, 'spa' | 'page' | 'none'> = {
@@ -80,9 +80,15 @@ export function migrateConfig(cwd: string, v1: MarcaponyConfig): MigrateResult {
     if (unknown.length > 0) notes.push(`Not carried over: assetsConfig ${unknown.join(', ')}`)
   }
   const date = compatibilityDate ?? '0000-00-00'
-  const runtime = RUNTIME_BY_DATE.find((r) => date >= r.fromDate)?.runtime ?? NEWEST_RUNTIME
+  const match = RUNTIME_BY_DATE.find((r) => date >= r.fromDate)
+  const runtime = match?.runtime ?? NEWEST_RUNTIME
   v2.runtime = runtime
   changes.push(`compatibilityDate/compatibilityFlags -> runtime ${runtime}`)
+  if (compatibilityDate && match && compatibilityDate !== match.date) {
+    notes.push(
+      `Runtime date changes from ${compatibilityDate} to ${match.date} (runtime ${runtime}). Test the app before deploying it.`,
+    )
+  }
   if (compatibilityFlags?.some((f) => f !== 'nodejs_compat')) {
     notes.push(
       `Not carried over: compatibility flags ${compatibilityFlags.filter((f) => f !== 'nodejs_compat').join(', ')}`,

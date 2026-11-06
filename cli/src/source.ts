@@ -268,8 +268,10 @@ export interface PushSourceOptions {
    * in `marcapony.lock`), or null for the first push to a branch. Never the remote head as
    * found at push time: that would silently replace changes this project has
    * not seen. A head that moved since the base makes git refuse the push.
+   * Undefined on a platform older than the sync rule: the commit goes on top
+   * of the remote head, as before it (none when the branch does not exist).
    */
-  parent: string | null
+  parent: string | null | undefined
   message?: string
   /** Injected in tests; defaults to isomorphic-git's network operations. */
   push?: typeof git.push
@@ -286,7 +288,9 @@ export class SourcePushRejectedError extends Error {}
 
 /**
  * Commit the collected files on top of `parent` and push. Returns the new
- * commit id. Fails closed: a fetch error is an error, never "no parent".
+ * commit id. With a base, it fails closed: a fetch error is an error, never
+ * "no parent". Without one (an older platform), a branch that cannot be
+ * fetched is taken to be new.
  */
 export async function pushSource(options: PushSourceOptions): Promise<string> {
   const { cwd, files, grant, parent } = options
@@ -303,7 +307,27 @@ export async function pushSource(options: PushSourceOptions): Promise<string> {
     // refspec in the config to write refs/remotes/origin/*.
     await git.addRemote({ ...common, remote: 'origin', url: grant.remote })
 
-    if (parent) {
+    let commitParent = parent ?? null
+    if (parent === undefined) {
+      try {
+        await fetchRemote({
+          ...common,
+          http,
+          url: grant.remote,
+          remote: 'origin',
+          ref: grant.branch,
+          singleBranch: true,
+          tags: false,
+          onAuth,
+        })
+        commitParent = await git.resolveRef({
+          ...common,
+          ref: `refs/remotes/origin/${grant.branch}`,
+        })
+      } catch {
+        commitParent = null
+      }
+    } else if (parent) {
       // The parent's objects must be local for the commit and the pack.
       await fetchRemote({
         ...common,
@@ -330,7 +354,7 @@ export async function pushSource(options: PushSourceOptions): Promise<string> {
       ref: `refs/heads/${grant.branch}`,
       message: options.message?.trim() || 'marcapony app deploy',
       author: { name: 'Marcapony CLI', email: 'cli@marcapony.com' },
-      parent: parent ? [parent] : [],
+      parent: commitParent ? [commitParent] : [],
     })
 
     try {

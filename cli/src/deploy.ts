@@ -188,6 +188,11 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     log(`Source not saved: ${disabledReason}`)
   }
 
+  // The pushed commit is the branch head now, whatever the deploy does next:
+  // record it at once, or a failed deploy would leave the lock behind the
+  // branch and the next deploy would stop on this project's own commit.
+  if (source && sync?.environmentId) writeBase(options.cwd, sync.environmentId, source.commit)
+
   // 5. Deploy. The server checks the claim again, for every CLI version.
   let deployment = await createDeployment(
     apiRoot,
@@ -367,7 +372,8 @@ async function trySourcePush(args: {
         cwd: options.cwd,
         files,
         grant,
-        parent: parent === undefined ? (grant.headBefore ?? null) : parent,
+        // An older platform knows no base: its grant's head, else the remote head.
+        parent: parent === undefined ? (grant.headBefore ?? undefined) : parent,
         message: options.message,
       })
     } finally {
