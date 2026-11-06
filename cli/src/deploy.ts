@@ -29,7 +29,9 @@ import { readBase, writeBase } from './lock.js'
 import { CONFLICT_MARKER } from './merge.js'
 import {
   SourcePushRejectedError,
+  blockingFindings,
   collectSourceFiles,
+  formatFinding,
   pushSource,
   scanForSecrets,
   type PushSourceOptions,
@@ -355,10 +357,19 @@ async function trySourcePush(args: {
   const fetchImpl = options.fetchImpl ?? fetch
   try {
     const findings = scanForSecrets(options.cwd, files)
-    if (findings.length > 0) {
-      for (const f of findings) log(`Secret scan: ${f.rule} in ${f.path}:${f.line}`)
-      log('Warning: source not saved because the secret scan found possible secrets')
+    const blocking = blockingFindings(findings)
+    if (blocking.length > 0) {
+      log('Secret scan found possible secrets:')
+      for (const f of blocking) log(`  ${formatFinding(f)}`)
+      log(
+        'Warning: source not saved. Move the values to `marcapony app env set`, or mark a test value with a "marcapony-scan: allow" comment. The deploy continues.',
+      )
       return null
+    }
+    const allowed = findings.filter((f) => f.allowed)
+    if (allowed.length > 0) {
+      log(`Secret scan: ${allowed.length} match(es) allowed by comment or test-fixture rule:`)
+      for (const f of allowed) log(`  ${formatFinding(f)}`)
     }
     const grant = await fetchSourceGrant(apiRoot, apiKey, fetchImpl, options.sleep)
     if (!grant) {

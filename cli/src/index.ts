@@ -11,6 +11,7 @@ import { runStatus } from './status.js'
 import { readHidden, readStdin, runEnvDelete, runEnvList, runEnvSet } from './env.js'
 import { runMigrateConfig } from './migrate.js'
 import { runSourceDryRun } from './source-command.js'
+import { runScan } from './scan.js'
 
 export { runLink } from './link.js'
 export { runDeploy, runDeployDetailed } from './deploy.js'
@@ -20,6 +21,8 @@ export { runStatus } from './status.js'
 export { runEnvDelete, runEnvList, runEnvSet } from './env.js'
 export { migrateConfig, runMigrateConfig } from './migrate.js'
 export { runSourceDryRun } from './source-command.js'
+export { runScan } from './scan.js'
+export * from './scan-rules.js'
 export * from './lock.js'
 export * from './merge.js'
 export * from './config.js'
@@ -43,6 +46,7 @@ Usage
   marcapony app env delete <NAME>
   marcapony app source --dry-run [--json]
   marcapony app migrate-config
+  marcapony scan [--cwd <dir>] [--json]
   marcapony guide [--cwd <dir>]
 
 Commands
@@ -71,6 +75,11 @@ Commands
   app migrate-config
                Rewrite marcapony.json to the current format and print what
                changed.
+  scan         Run the secret scan alone over the files a deploy would save,
+               for a pre-commit hook or CI. Prints path:line, the rule and the
+               first four characters of the value. A line with a
+               "marcapony-scan: allow" comment, or the line below it, is
+               allowed and still listed.
   guide        Print the AI-readable setup guide for this project (the same
                content written to AGENTS.md), listing the SDK calls and schemas
                your app key can use.
@@ -93,7 +102,8 @@ Options
 
 Exit codes
   0 done, 1 error, 2 the environment has changes to pull, 3 conflicts to
-  resolve, 4 refused by the platform, 5 project not linked
+  resolve, 4 refused by the platform, 5 project not linked, 6 the secret
+  scan found possible secrets
 `
 
 export interface ParsedArgs {
@@ -177,6 +187,11 @@ export async function main(argv: string[]): Promise<number> {
     const json = flags.json === true
     // With --json, progress goes to stderr so stdout is one JSON document.
     const log = json ? (m: string) => console.error(m) : (m: string) => console.log(m)
+    if (namespace === 'scan') {
+      const result = runScan({ cwd, log })
+      if (json) console.log(JSON.stringify({ ok: result.findings.length === 0, ...result }))
+      return result.findings.length > 0 ? EXIT.secretsFound : EXIT.ok
+    }
     if (namespace === 'app' && action === 'deploy') {
       const result = await runDeployDetailed({
         cwd,

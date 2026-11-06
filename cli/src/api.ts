@@ -104,7 +104,8 @@ export interface Capability {
 /**
  * Stable exit codes, so scripts and agents can branch on the outcome without
  * reading the message: 0 done, 2 the remote has changes this project has not
- * pulled, 3 a pull left conflicts, 4 the server refused, 5 not linked.
+ * pulled, 3 a pull left conflicts, 4 the server refused, 5 not linked, 6 the
+ * secret scan found possible secrets.
  */
 export const EXIT = {
   ok: 0,
@@ -113,6 +114,8 @@ export const EXIT = {
   conflicts: 3,
   refused: 4,
   notLinked: 5,
+  /** `marcapony scan` found possible secrets. */
+  secretsFound: 6,
 } as const
 
 export class CliError extends Error {

@@ -6,6 +6,16 @@ import git from 'isomorphic-git'
 import http from 'isomorphic-git/http/node'
 import { isManifestV2, publicDirOf, serverPathOf, type MarcaponyConfig } from './config.js'
 import type { SourceGrant } from './api.js'
+import { decideIgnore, parseIgnoreRules, type IgnoreRule } from './ignore.js'
+import {
+  MAX_SCAN_BYTES as MAX_SCAN_FILE_BYTES,
+  blockingFindings,
+  isUnscannable,
+  scanText,
+  type ScanFinding,
+} from './scan-rules.js'
+
+export { parseIgnoreRules, type IgnoreRule } from './ignore.js'
 
 /**
  * Source collection and push for `marcapony app deploy`. The source goes to a git repo on the
@@ -22,73 +32,6 @@ const ALWAYS_IGNORED_DIRS = new Set(['node_modules', '.git', '.wrangler', '.marc
 // rules say. `.dev.vars.<env>` and `.env.<anything>` are the local env files.
 const ALWAYS_IGNORED_FILE =
   /^(\.dev\.vars(\..*)?|\.env(\..*)?|\.npmrc|\.netrc|.*\.pem|.*\.key|.*\.p12|.*\.pfx|id_(rsa|dsa|ecdsa|ed25519))$/
-
-export interface IgnoreRule {
-  /** True for a `!` line, which re-includes what an earlier rule excluded. */
-  negate: boolean
-  /** The rule as written, and where, for `marcapony app source --dry-run`. */
-  pattern: string
-  source: string
-  test: (path: string) => boolean
-}
-
-function globToRegexSource(glob: string): string {
-  let out = ''
-  for (let i = 0; i < glob.length; i++) {
-    const ch = glob[i] as string
-    if (ch === '*') {
-      if (glob[i + 1] === '*') {
-        out += '.*'
-        i++
-        if (glob[i + 1] === '/') i++
-      } else {
-        out += '[^/]*'
-      }
-    } else if (ch === '?') {
-      out += '[^/]'
-    } else {
-      out += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    }
-  }
-  return out
-}
-
-/**
- * Gitignore syntax: comments, `!` negation, `*`, `**`, `?`, a leading or
- * middle `/` to anchor, a trailing `/` for directories. `base` is the
- * directory a nested `.gitignore` sits in; its rules only see paths below it.
- */
-export function parseIgnoreRules(content: string, source = '', base = ''): IgnoreRule[] {
-  const rules: IgnoreRule[] = []
-  const prefixPath = base ? `${base}/` : ''
-  for (const raw of content.split('\n')) {
-    let line = raw.replace(/\r$/, '').trim()
-    if (!line || line.startsWith('#')) continue
-    const negate = line.startsWith('!')
-    if (negate) line = line.slice(1)
-    const pattern = raw.trim()
-    const dirOnly = line.endsWith('/')
-    if (dirOnly) line = line.slice(0, -1)
-    const anchored = line.startsWith('/') || line.includes('/')
-    line = line.replace(/^\/+/, '')
-    if (!line) continue
-    const body = globToRegexSource(line)
-    const prefix = anchored ? '^' : '^(?:.*/)?'
-    // A directory pattern matches the directory itself (tested as `dir/`).
-    const suffix = dirOnly ? '/$' : '/?$'
-    const re = new RegExp(`${prefix}${body}${suffix}`)
-    rules.push({
-      negate,
-      pattern,
-      source,
-      test: (path) => {
-        if (prefixPath && !path.startsWith(prefixPath)) return false
-        return re.test(path.slice(prefixPath.length))
-      },
-    })
-  }
-  return rules
-}
 
 /** First path segment of the build outputs named in marcapony.json. */
 export function buildOutputDirs(config: MarcaponyConfig): string[] {
@@ -149,11 +92,8 @@ export function planSourceFiles(cwd: string, config: MarcaponyConfig, explain = 
   const skipped: SkippedFile[] = []
   let total = 0
 
-  const decide = (path: string, rules: IgnoreRule[]): IgnoreRule | null => {
-    let last: IgnoreRule | null = null
-    for (const rule of [...rules, ...laterRules]) if (rule.test(path)) last = rule
-    return last && !last.negate ? last : null
-  }
+  const decide = (path: string, rules: IgnoreRule[]): IgnoreRule | null =>
+    decideIgnore(path, [...rules, ...laterRules])
   const skip = (path: string, reason: string): void => {
     if (explain) skipped.push({ path, reason })
   }
@@ -221,42 +161,37 @@ export function collectSourceFiles(cwd: string, config: MarcaponyConfig): string
   return planSourceFiles(cwd, config).files
 }
 
-export interface SecretFinding {
-  path: string
-  line: number
-  rule: string
-}
-
-const SECRET_RULES: Array<{ rule: string; re: RegExp }> = [
-  { rule: 'Marcapony API key', re: /\bmpk_[A-Za-z0-9]{16,}/ },
-  { rule: 'Stripe-style secret key', re: /\bsk_(live|test)_[A-Za-z0-9]{16,}/ },
-  { rule: 'AWS access key id', re: /\bAKIA[0-9A-Z]{16}\b/ },
-  { rule: 'Private key block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  { rule: 'GCP service account JSON', re: /"type"\s*:\s*"service_account"/ },
-]
+export type { ScanFinding } from './scan-rules.js'
 
 /**
- * Stub of the §3.3 scan: known key formats only, no entropy heuristics, no
- * provider-specific rules (Iyzico, PayTR). Reports file and line, never the
- * value. The full scan and the server-side re-scan land in phase A2.
+ * The secret scan over the files a deploy would save. Returns every match,
+ * the ones an allow comment or the test-fixture rule let through included
+ * (marked `allowed`), so the push summary can list them. Binary files and
+ * files over 1 MiB are not scanned.
  */
-export function scanForSecrets(cwd: string, files: string[]): SecretFinding[] {
-  const findings: SecretFinding[] = []
+export function scanForSecrets(cwd: string, files: string[]): ScanFinding[] {
+  const findings: ScanFinding[] = []
   for (const path of files) {
     let text: string
+    let size: number
     try {
+      size = statSync(join(cwd, path)).size
+      if (size > MAX_SCAN_FILE_BYTES) continue
       text = readFileSync(join(cwd, path), 'utf8')
     } catch {
       continue
     }
-    if (text.includes('\u0000')) continue
-    text.split('\n').forEach((line, index) => {
-      for (const { rule, re } of SECRET_RULES) {
-        if (re.test(line)) findings.push({ path, line: index + 1, rule })
-      }
-    })
+    if (isUnscannable(text, size)) continue
+    findings.push(...scanText(path, text, { side: 'cli' }))
   }
   return findings
+}
+
+export { blockingFindings }
+
+/** One line per finding: `path:line  rule  value…`; the value is never shown in full. */
+export function formatFinding(f: ScanFinding): string {
+  return `${f.path}:${f.line}  ${f.rule}  ${f.masked}`
 }
 
 export interface PushSourceOptions {
