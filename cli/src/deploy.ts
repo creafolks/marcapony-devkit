@@ -26,7 +26,7 @@ import {
   serverPathOf,
   type MarcaponyConfig,
 } from './config.js'
-import { readBase, writeBase } from './lock.js'
+import { localGitHead, readBase, writeBase } from './lock.js'
 import { CONFLICT_MARKER } from './merge.js'
 import {
   SourcePushRejectedError,
@@ -342,6 +342,9 @@ function resolveBase(cwd: string, head: SourceHead, force: boolean): string | nu
   if (head.head === null) return rewritten
   if (entry === undefined) {
     if (force) return null
+    // A clone of the environment's branch (`git clone`, then `app link`):
+    // its own HEAD is the base.
+    if (localGitHead(cwd) === head.head) return head.head
     throw new CliError(
       'This project has not synced with the environment yet. Run `marcapony app pull` once, then deploy.',
       { code: 'remote_changes', exitCode: EXIT.remoteChanges },

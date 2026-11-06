@@ -59,21 +59,7 @@ export async function runLink(options: LinkOptions): Promise<void> {
   const result = await exchangeCode(apiRoot, code, fetchImpl, { ci: options.ci === true })
 
   const existing = readConfig(options.cwd)
-  // A project linked before version 2 keeps its file; everything new gets
-  // `.env.local`.
-  const envFile = envFileOf(options.cwd, existing)
-
-  // Ignore before writing: if this throws, no key has hit the disk yet.
-  const newlyIgnored = ensureEnvFileIgnored(options.cwd, envFile)
-
-  writeEnvFile(
-    options.cwd,
-    upsertEnvLines(readEnvFile(options.cwd, envFile), {
-      MARCAPONY_API_KEY: result.key,
-      MARCAPONY_API_URL: result.baseUrl,
-    }),
-    envFile,
-  )
+  const { envFile, newlyIgnored } = writeLinkedKey(options.cwd, existing, result)
 
   const detected = detectDefaults(options.cwd)
   // Start from the existing file so fields link does not own (placement,
@@ -105,17 +91,7 @@ export async function runLink(options: LinkOptions): Promise<void> {
       `  CI key         store MARCAPONY_API_KEY from ${envFile} in your pipeline's secret store, then remove it from this machine`,
     )
   } else {
-    // The new key is on disk, so the ones it replaces can go. A platform
-    // older than rotation answers null and keeps them.
-    try {
-      const revoked = await retirePreviousKeys(apiRoot, result.key, fetchImpl)
-      if (revoked)
-        log(`  Earlier keys   ${revoked} of your previous key(s) for this environment revoked`)
-    } catch (err) {
-      log(
-        `  Earlier keys   not revoked (${err instanceof Error ? err.message : 'request failed'}); revoke them from the app page`,
-      )
-    }
+    await retireEarlierKeys(apiRoot, result.key, fetchImpl, log)
   }
   if (newlyIgnored) log(`  .gitignore     ${envFile} added; it holds a live key, never commit it`)
   log(`  marcapony.json build "${config.build}", server "${serverPathOf(config)}"`)
@@ -123,18 +99,76 @@ export async function runLink(options: LinkOptions): Promise<void> {
     log('  Tip: `marcapony app migrate-config` moves marcapony.json to the current format.')
   }
 
-  // Write AGENTS.md so the project's AI assistant has the exact SDK calls +
-  // schemas for this app's features. Best-effort: the key and config are
-  // already written, so a capabilities hiccup must not fail the link.
+  await writeAgentsBestEffort(options.cwd, config.app, result.key, envFile, apiRoot, fetchImpl, log)
+
+  log(`Next: marcapony app deploy`)
+}
+
+/**
+ * Write the key into the project's env file, ignored by git before anything
+ * is written: if that throws, no key has hit the disk. A project linked
+ * before manifest version 2 keeps `.dev.vars`; everything new gets `.env.local`.
+ */
+export function writeLinkedKey(
+  cwd: string,
+  existing: MarcaponyConfig | null,
+  result: { key: string; baseUrl: string },
+): { envFile: string; newlyIgnored: boolean } {
+  const envFile = envFileOf(cwd, existing)
+  const newlyIgnored = ensureEnvFileIgnored(cwd, envFile)
+  writeEnvFile(
+    cwd,
+    upsertEnvLines(readEnvFile(cwd, envFile), {
+      MARCAPONY_API_KEY: result.key,
+      MARCAPONY_API_URL: result.baseUrl,
+    }),
+    envFile,
+  )
+  return { envFile, newlyIgnored }
+}
+
+/**
+ * The new key is on disk, so the ones it replaces can go. A platform older
+ * than rotation answers null and keeps them.
+ */
+export async function retireEarlierKeys(
+  apiRoot: string,
+  key: string,
+  fetchImpl: typeof fetch,
+  log: (message: string) => void,
+): Promise<void> {
   try {
-    const capabilities = await fetchCapabilities(apiRoot, result.key, fetchImpl)
-    writeAgentsFile(options.cwd, renderAgents({ appName: config.app, capabilities, envFile }))
+    const revoked = await retirePreviousKeys(apiRoot, key, fetchImpl)
+    if (revoked)
+      log(`  Earlier keys   ${revoked} of your previous key(s) for this environment revoked`)
+  } catch (err) {
+    log(
+      `  Earlier keys   not revoked (${err instanceof Error ? err.message : 'request failed'}); revoke them from the app page`,
+    )
+  }
+}
+
+/**
+ * AGENTS.md gives the project's AI assistant the exact SDK calls and schemas
+ * for this app's features. Best effort: the key is already written, so a
+ * capabilities hiccup must not fail the command.
+ */
+export async function writeAgentsBestEffort(
+  cwd: string,
+  appName: string,
+  key: string,
+  envFile: string,
+  apiRoot: string,
+  fetchImpl: typeof fetch,
+  log: (message: string) => void,
+): Promise<void> {
+  try {
+    const capabilities = await fetchCapabilities(apiRoot, key, fetchImpl)
+    writeAgentsFile(cwd, renderAgents({ appName, capabilities, envFile }))
     log(`  AGENTS.md       ${capabilities.length} operation(s) documented for your AI assistant`)
   } catch (err) {
     log(
       `  AGENTS.md       skipped (${err instanceof Error ? err.message : 'could not fetch capabilities'})`,
     )
   }
-
-  log(`Next: marcapony app deploy`)
 }

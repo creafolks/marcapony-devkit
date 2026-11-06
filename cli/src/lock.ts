@@ -50,3 +50,34 @@ export function writeBase(
   )
   writeFileSync(join(cwd, LOCK_FILE), `${JSON.stringify({ environments }, null, 2)}\n`)
 }
+
+const SHA = /^[0-9a-f]{40}$/
+
+/**
+ * The commit the project's own git repo has checked out, read from `.git`
+ * without a git binary: a detached HEAD, a loose ref or a packed one. Null
+ * when the project is not a git repo or the ref cannot be resolved.
+ */
+export function localGitHead(cwd: string): string | null {
+  const gitDir = join(cwd, '.git')
+  try {
+    const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim()
+    if (SHA.test(head)) return head
+    const ref = /^ref: (refs\/[^\s]+)$/.exec(head)?.[1]
+    if (!ref || ref.split('/').includes('..')) return null
+    const loose = join(gitDir, ref)
+    if (existsSync(loose)) {
+      const sha = readFileSync(loose, 'utf8').trim()
+      return SHA.test(sha) ? sha : null
+    }
+    const packed = join(gitDir, 'packed-refs')
+    if (!existsSync(packed)) return null
+    for (const line of readFileSync(packed, 'utf8').split('\n')) {
+      const [sha, name] = line.trim().split(' ')
+      if (sha && name === ref && SHA.test(sha)) return sha
+    }
+    return null
+  } catch {
+    return null
+  }
+}
