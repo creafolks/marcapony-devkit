@@ -48,8 +48,10 @@ filled in.
 A key lasts 90 days. Linking again with a new pairing code renews it: the new
 key is written first, then your earlier key for the same environment is
 revoked, so a project never holds more than one live key of yours. Keys made by
-teammates are not touched. From 14 days before the expiry, every deploy prints
-a warning with the command to run.
+teammates and keys made with `--ci` are not touched. Keys made before 0.7.0
+carry no label and are not revoked by a re-link either; revoke them from the
+app's page in the dashboard. From 14 days before the expiry, every deploy
+prints a warning with the command to run.
 
 For a CI pipeline, link with `--ci`:
 

@@ -395,9 +395,9 @@ async function trySourcePush(args: {
       log('Secret scan found possible secrets:')
       for (const f of blocking) log(`  ${formatFinding(f)}`)
       log(
-        blocking.some((f) => f.kind === 'generic')
-          ? 'Warning: source not saved. Move the values to `marcapony app env set`, or mark a high-entropy test string with a "marcapony-scan: allow" comment. The deploy continues.'
-          : 'Warning: source not saved. Move the keys to `marcapony app env set` and rotate them. The deploy continues.',
+        blocking.some((f) => f.kind === 'provider')
+          ? 'Warning: source not saved. Move the keys to `marcapony app env set` and rotate them. The deploy continues.'
+          : 'Warning: source not saved. Move the values to `marcapony app env set`, or mark a high-entropy test string with a "marcapony-scan: allow" comment. The deploy continues.',
       )
       return null
     }
@@ -407,7 +407,7 @@ async function trySourcePush(args: {
       for (const f of allowed) log(`  ${formatFinding(f)}`)
       if (allowed.some((f) => f.kind === 'provider')) {
         log(
-          'Warning: the platform does not accept the allow comment for provider keys (Stripe, AWS, GitHub and the like). The source is saved, but that version will be blocked from reading until the key is removed.',
+          'Warning: the platform does not accept the allow comment for provider keys (Stripe, AWS, GitHub and the like). The source is saved, but that version will be blocked from reading, and removing the key in a later version does not unblock it: rotate the key.',
         )
       }
     }
