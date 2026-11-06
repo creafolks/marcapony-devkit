@@ -356,25 +356,21 @@ export async function retirePreviousKeys(
 
 /**
  * The key's own record (expiry and label), or null when the platform does not
- * say. Tries the key route first and the older `me` route second.
+ * say (an older platform has no such route).
  */
 export async function fetchKeyInfo(
   apiRoot: string,
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<KeyInfo | null> {
-  for (const path of ['/ext/v1/keys/current', '/ext/v1/me']) {
-    const res = await fetchImpl(`${apiRoot}${path}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
-    if (!res.ok) continue
-    const body = (await res.json().catch(() => null)) as {
-      data?: Partial<KeyInfo> & { key?: Partial<KeyInfo> }
-    } | null
-    const info = body?.data?.key ?? body?.data
-    if (info && typeof info.id === 'string' && info.expiresAt !== undefined) {
-      return { id: info.id, expiresAt: info.expiresAt ?? null, cliLabel: info.cliLabel ?? null }
-    }
+  const res = await fetchImpl(`${apiRoot}/ext/v1/keys/current`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) return null
+  const body = (await res.json().catch(() => null)) as { data?: Partial<KeyInfo> } | null
+  const info = body?.data
+  if (info && typeof info.id === 'string' && info.expiresAt !== undefined) {
+    return { id: info.id, expiresAt: info.expiresAt ?? null, cliLabel: info.cliLabel ?? null }
   }
   return null
 }

@@ -187,7 +187,7 @@ function isPlaceholder(value: string): boolean {
   return PLACEHOLDER_RE.test(value)
 }
 
-function isTestFixturePath(path: string): boolean {
+export function isTestFixturePath(path: string): boolean {
   return /(^|\/)__fixtures__\//.test(path) || /\.test\.[A-Za-z0-9]+$/.test(path)
 }
 

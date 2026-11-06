@@ -118,16 +118,11 @@ describe('api helpers', () => {
     expect(await retirePreviousKeys('http://x', 'mpk_k', fetch)).toBeNull()
   })
 
-  it('fetchKeyInfo reads the key route, then falls back to me', async () => {
+  it('fetchKeyInfo reads the key route, and is null on an older platform', async () => {
     const info = { id: 'k', expiresAt: '2026-11-20T00:00:00.000Z', cliLabel: 'local' }
     const direct = routeFetch({ '/keys/current': () => json({ data: info }) })
     expect(await fetchKeyInfo('http://x', 'mpk_k', direct.fetch)).toEqual(info as never)
-    const fallback = routeFetch({
-      '/keys/current': () => json({}, 404),
-      '/me': () => json({ data: { key: info } }),
-    })
-    expect(await fetchKeyInfo('http://x', 'mpk_k', fallback.fetch)).toEqual(info as never)
-    const none = routeFetch({ '/keys/current': () => json({}, 404), '/me': () => json({}, 401) })
+    const none = routeFetch({ '/keys/current': () => json({}, 404) })
     expect(await fetchKeyInfo('http://x', 'mpk_k', none.fetch)).toBeNull()
   })
 })
