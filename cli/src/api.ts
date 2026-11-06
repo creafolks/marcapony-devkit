@@ -5,6 +5,17 @@ export interface LinkResponse {
   environmentName: string
   key: string
   baseUrl: string
+  /** Absent on platforms older than key rotation. */
+  keyId?: string
+  expiresAt?: string | null
+}
+
+/** What the platform says about the key in use. */
+export interface KeyInfo {
+  id: string
+  expiresAt: string | null
+  /** `ci` for a key made with `marcapony app link --ci`, `local` for a project key. */
+  cliLabel: 'local' | 'ci' | null
 }
 
 export interface DeploymentView {
@@ -168,11 +179,12 @@ export async function exchangeCode(
   apiRoot: string,
   code: string,
   fetchImpl: typeof fetch = fetch,
+  options: { ci?: boolean } = {},
 ): Promise<LinkResponse> {
   const res = await fetchImpl(`${apiRoot}/apps/link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify(options.ci ? { code, ci: true } : { code }),
   })
   if (!res.ok) throw await failure(res)
   return (await res.json()) as LinkResponse
@@ -320,4 +332,49 @@ export async function validateDeployment(
   if (res.status === 404) return false
   if (!res.ok) throw await failure(res)
   return true
+}
+
+/**
+ * Revoke this user's earlier project keys for the same environment, called
+ * with the new key once it is written. Keys of other users and pipeline keys
+ * are left alone by the platform. Null on a platform older than the route.
+ */
+export async function retirePreviousKeys(
+  apiRoot: string,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<number | null> {
+  const res = await fetchImpl(`${apiRoot}/ext/v1/keys/retire-previous`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (res.status === 400 || res.status === 404 || res.status === 405) return null
+  if (!res.ok) throw await failure(res)
+  const body = (await res.json()) as { data?: { revoked?: number }; revoked?: number }
+  return body.data?.revoked ?? body.revoked ?? 0
+}
+
+/**
+ * The key's own record (expiry and label), or null when the platform does not
+ * say. Tries the key route first and the older `me` route second.
+ */
+export async function fetchKeyInfo(
+  apiRoot: string,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<KeyInfo | null> {
+  for (const path of ['/ext/v1/keys/current', '/ext/v1/me']) {
+    const res = await fetchImpl(`${apiRoot}${path}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    })
+    if (!res.ok) continue
+    const body = (await res.json().catch(() => null)) as {
+      data?: Partial<KeyInfo> & { key?: Partial<KeyInfo> }
+    } | null
+    const info = body?.data?.key ?? body?.data
+    if (info && typeof info.id === 'string' && info.expiresAt !== undefined) {
+      return { id: info.id, expiresAt: info.expiresAt ?? null, cliLabel: info.cliLabel ?? null }
+    }
+  }
+  return null
 }

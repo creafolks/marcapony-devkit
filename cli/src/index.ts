@@ -37,7 +37,7 @@ const VERSION = '0.6.0'
 const USAGE = `marcapony — build and deploy Marcapony apps
 
 Usage
-  marcapony app link [--code <code>] [--cwd <dir>]
+  marcapony app link [--code <code>] [--ci] [--cwd <dir>]
   marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--json]
   marcapony app status [--cwd <dir>] [--json]
   marcapony app pull [--cwd <dir>] [--patch] [--check] [--yes] [--json]
@@ -52,7 +52,11 @@ Usage
 Commands
   app link     Exchange a one-time pairing code for this project's environment
                key. Writes .env.local, marcapony.json and AGENTS.md. Get the code
-               from the app's page in your Marcapony dashboard.
+               from the app's page in your Marcapony dashboard. Keys last 90
+               days; linking again renews the key and revokes your earlier one
+               for the environment. With --ci the key is labelled for a
+               pipeline: store it in the pipeline's secret store as
+               MARCAPONY_API_KEY, and earlier keys stay valid.
   app deploy   Run the project's build, upload the bundle, and wait until it is
                live. The target environment comes from the key — there is no
                --env flag. The project source is saved with each deploy;
@@ -86,6 +90,7 @@ Commands
 
 Options
   --code <code>     Pairing code (link only; prompted when omitted)
+  --ci              Make a key for a CI pipeline (link only)
   --cwd <dir>       Project directory (defaults to the current directory)
   --message <text>  Version message saved with the source (deploy only)
   --no-source       Do not save the project source with this deploy
@@ -126,6 +131,7 @@ const BOOLEAN_FLAGS = new Set([
   'secret',
   'show',
   'dry-run',
+  'ci',
 ])
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -181,7 +187,13 @@ export async function main(argv: string[]): Promise<number> {
       return 0
     }
     if (namespace === 'app' && action === 'link') {
-      await runLink({ cwd, cliEnv, code: stringFlag(flags, 'code'), env: process.env })
+      await runLink({
+        cwd,
+        cliEnv,
+        code: stringFlag(flags, 'code'),
+        ci: flags.ci === true,
+        env: process.env,
+      })
       return 0
     }
     const json = flags.json === true
@@ -201,6 +213,7 @@ export async function main(argv: string[]): Promise<number> {
         message: stringFlag(flags, 'message'),
         source: flags['no-source'] !== true,
         force: flags.force === true,
+        checkKeyExpiry: true,
       })
       if (json) console.log(JSON.stringify({ ok: true, ...result }))
       return EXIT.ok

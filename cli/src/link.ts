@@ -1,4 +1,4 @@
-import { exchangeCode, fetchCapabilities } from './api.js'
+import { exchangeCode, fetchCapabilities, retirePreviousKeys } from './api.js'
 import { renderAgents, writeAgentsFile } from './agents.js'
 import {
   NEWEST_RUNTIME,
@@ -27,6 +27,8 @@ export interface LinkOptions {
   /** Injected in tests; defaults to a terminal prompt. */
   prompt?: (question: string) => Promise<string>
   log?: (message: string) => void
+  /** A key for a pipeline: labelled CI, and earlier keys stay valid. */
+  ci?: boolean
 }
 
 async function terminalPrompt(question: string): Promise<string> {
@@ -53,7 +55,8 @@ export async function runLink(options: LinkOptions): Promise<void> {
   const code = (options.code ?? (await prompt('Pairing code: '))).trim()
   if (!code) throw new Error('A pairing code is required. Generate one from the app page.')
 
-  const result = await exchangeCode(apiRoot, code, options.fetchImpl ?? fetch)
+  const fetchImpl = options.fetchImpl ?? fetch
+  const result = await exchangeCode(apiRoot, code, fetchImpl, { ci: options.ci === true })
 
   const existing = readConfig(options.cwd)
   // A project linked before version 2 keeps its file; everything new gets
@@ -95,6 +98,25 @@ export async function runLink(options: LinkOptions): Promise<void> {
 
   log(`Linked to ${config.app} (${result.environmentName}).`)
   log(`  ${envFile.padEnd(14)} MARCAPONY_API_KEY, MARCAPONY_API_URL written`)
+  if (result.expiresAt)
+    log(`  Key expires    ${result.expiresAt.slice(0, 10)}; link again to renew it`)
+  if (options.ci) {
+    log(
+      `  CI key         store MARCAPONY_API_KEY from ${envFile} in your pipeline's secret store, then remove it from this machine`,
+    )
+  } else {
+    // The new key is on disk, so the ones it replaces can go. A platform
+    // older than rotation answers null and keeps them.
+    try {
+      const revoked = await retirePreviousKeys(apiRoot, result.key, fetchImpl)
+      if (revoked)
+        log(`  Earlier keys   ${revoked} of your previous key(s) for this environment revoked`)
+    } catch (err) {
+      log(
+        `  Earlier keys   not revoked (${err instanceof Error ? err.message : 'request failed'}); revoke them from the app page`,
+      )
+    }
+  }
   if (newlyIgnored) log(`  .gitignore     ${envFile} added; it holds a live key, never commit it`)
   log(`  marcapony.json build "${config.build}", server "${serverPathOf(config)}"`)
   if (existing && !isManifestV2(existing)) {
@@ -105,7 +127,7 @@ export async function runLink(options: LinkOptions): Promise<void> {
   // schemas for this app's features. Best-effort: the key and config are
   // already written, so a capabilities hiccup must not fail the link.
   try {
-    const capabilities = await fetchCapabilities(apiRoot, result.key, options.fetchImpl ?? fetch)
+    const capabilities = await fetchCapabilities(apiRoot, result.key, fetchImpl)
     writeAgentsFile(options.cwd, renderAgents({ appName: config.app, capabilities, envFile }))
     log(`  AGENTS.md       ${capabilities.length} operation(s) documented for your AI assistant`)
   } catch (err) {

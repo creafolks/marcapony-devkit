@@ -8,6 +8,7 @@ import {
   closeSourceGrant,
   createDeployment,
   fetchDeployment,
+  fetchKeyInfo,
   fetchSourceGrant,
   fetchSourceHead,
   validateDeployment,
@@ -55,6 +56,10 @@ export interface DeployOptions {
   source?: boolean
   /** Replace commits on the branch that this project has not pulled. */
   force?: boolean
+  /** Warn when the app key expires within 14 days (one extra request after the deploy). */
+  checkKeyExpiry?: boolean
+  /** Injected in tests. */
+  now?: () => Date
 }
 
 /** What a deploy did, for `--json`. */
@@ -243,7 +248,35 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   } else {
     log(`Live (deployment ${deployment.id})`)
   }
+  if (options.checkKeyExpiry) {
+    await warnIfKeyExpiring(apiRoot, apiKey, fetchImpl, log, options.now?.() ?? new Date())
+  }
   return { deployment, source, base: base ?? null, forced: force }
+}
+
+export const KEY_EXPIRY_WARNING_DAYS = 14
+
+/** Best effort: a key that expires soon is renewed by linking again. Never fails the deploy. */
+export async function warnIfKeyExpiring(
+  apiRoot: string,
+  apiKey: string,
+  fetchImpl: typeof fetch,
+  log: (message: string) => void,
+  now: Date,
+): Promise<void> {
+  let info: Awaited<ReturnType<typeof fetchKeyInfo>>
+  try {
+    info = await fetchKeyInfo(apiRoot, apiKey, fetchImpl)
+  } catch {
+    return
+  }
+  if (!info?.expiresAt) return
+  const days = Math.ceil((new Date(info.expiresAt).getTime() - now.getTime()) / 86_400_000)
+  if (!Number.isFinite(days) || days > KEY_EXPIRY_WARNING_DAYS) return
+  const command = info.cliLabel === 'ci' ? 'marcapony app link --ci' : 'marcapony app link'
+  log(
+    `Warning: this app key expires in ${Math.max(days, 0)} day(s), on ${info.expiresAt.slice(0, 10)}. Get a pairing code from the app page and run \`${command}\` to renew it.`,
+  )
 }
 
 /**

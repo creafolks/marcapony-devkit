@@ -40,7 +40,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 /**
  * Answers in order from `responses`. The sync routes
- * (source-head, validate, grant close) answer from `routes` instead and are not
+ * (source-head, validate, grant close, key retirement, key info) answer from `routes` instead and are not
  * recorded in `calls`; by default they behave like a platform older than the
  * sync rule (404), so these tests cover the deploy as it was.
  */
@@ -58,6 +58,10 @@ function makeFetch(
     '/source-head': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
     '/validate': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
     '/close': () => jsonResponse({ data: { outcome: 'ok', headAfter: null } }),
+    // A platform older than key rotation; the rotation tests answer it themselves.
+    '/retire-previous': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/keys/current': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
+    '/ext/v1/me': () => jsonResponse({ error: { code: 'not_found', message: 'nope' } }, 404),
   }
   const impl = (async (url: string | URL | Request, init?: RequestInit) => {
     const u = String(url)
