@@ -127,6 +127,8 @@ export function describeProjectCredential(
   cwd: string,
   env: NodeJS.ProcessEnv,
   apiRoot: string,
+  /** Whether a usable login exists for this account; unknown means assume yes. */
+  hasLogin?: (accountId: string) => boolean,
 ): string {
   const project = readProjectLink(cwd)
   const linkedWithLogin = project !== null && project.apiRoot === apiRoot
@@ -135,6 +137,9 @@ export function describeProjectCredential(
     !(linkedWithLogin && env.MARCAPONY_API_KEY === resolveApiKey(cwd, {}))
   ) {
     return 'MARCAPONY_API_KEY from the environment'
+  }
+  if (project && linkedWithLogin && hasLogin && !hasLogin(project.accountId)) {
+    return `a login to ${project.accountSlug ?? project.accountId}, and you are not logged in there: run \`marcapony login\``
   }
   if (project && linkedWithLogin) {
     return `your login to ${project.accountSlug ?? project.accountId} (${project.appSlug}, ${project.environment})`

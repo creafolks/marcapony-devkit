@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { CliError, EXIT } from '../api'
 import { clearSessionCache, resolveDeployKey } from '../credentials'
 import { runLink } from '../link'
-import { runLogin, runLogout } from '../login'
+import { runLogin, runLoginStatus, runLogout } from '../login'
 import {
   LoginIndex,
   keychainStore,
@@ -348,6 +348,35 @@ describe('which key a command deploys with', () => {
       index: new LoginIndex(configDir),
     }).catch((e) => e)) as CliError
     expect(err.exitCode).toBe(EXIT.loginRequired)
+  })
+
+  it('login status says a login-linked folder needs a login once you are logged out', async () => {
+    writeProjectLink(dir, {
+      apiRoot: API,
+      accountId: 'acc-1',
+      accountSlug: 'abc',
+      appId: APP_ID,
+      appSlug: 'kaynak',
+      environment: 'test',
+    })
+    const loggedOut = await runLoginStatus({
+      cwd: dir,
+      cliEnv: 'staging',
+      env: {},
+      log: () => undefined,
+      index: new LoginIndex(configDir),
+    })
+    expect(loggedOut.project).toContain('you are not logged in there')
+    const { index, store } = loggedIn()
+    const loggedInStatus = await runLoginStatus({
+      cwd: dir,
+      cliEnv: 'staging',
+      env: {},
+      log: () => undefined,
+      index,
+      store: async () => store,
+    })
+    expect(loggedInStatus.project).toBe('your login to abc (kaynak, test)')
   })
 
   it('exits 7 when the platform no longer accepts the login', async () => {

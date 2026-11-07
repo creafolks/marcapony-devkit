@@ -248,7 +248,9 @@ export async function runLoginStatus(options: {
       `${login.account} (${new URL(login.api).host}) as ${login.user ?? 'unknown'}, until ${login.expiresAt.slice(0, 10)} if unused, in the ${where}${login.available ? '' : ', missing from storage: log in again'}`,
     )
   }
-  const project = describeProjectCredential(options.cwd, options.env, apiRoot)
+  const project = describeProjectCredential(options.cwd, options.env, apiRoot, (accountId) =>
+    logins.some((l) => l.api === apiRoot && l.accountId === accountId && l.available),
+  )
   log(`This folder deploys with ${project}.`)
   return { logins, project }
 }

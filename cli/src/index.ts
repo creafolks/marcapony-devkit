@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
 import { CliError, EXIT } from './api.js'
 import { runDeployDetailed } from './deploy.js'
-import { isProjectFolder, readSavedCliEnv, saveCliEnv } from './cli-env.js'
+import { readSavedCliEnv, saveCliEnv, saveLoginCliEnv } from './cli-env.js'
 import { runLink } from './link.js'
 import { runClone } from './clone.js'
 import { runGuide } from './guide.js'
@@ -42,7 +42,7 @@ export * from './agents.js'
 
 // Kept in step with cli/package.json by a test — `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.11.1'
+const VERSION = '0.11.2'
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
@@ -292,7 +292,7 @@ export async function main(argv: string[]): Promise<number> {
         interactive: process.stdout.isTTY === true,
         log: out,
       })
-      if (explicitCliEnv && isProjectFolder(cwd)) saveCliEnv(cwd, explicitCliEnv)
+      if (explicitCliEnv) saveLoginCliEnv(cwd, explicitCliEnv)
       if (json) console.log(JSON.stringify({ ok: true, ...result }))
       return EXIT.ok
     }
