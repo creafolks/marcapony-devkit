@@ -142,16 +142,16 @@ const PROPOSERS: Record<NonNullable<MovedBy['proposedBy']>, string> = {
 }
 
 /**
- * "Ayşe deployed version 15", "Marco's change, approved by Ayşe (version 15)",
- * or "Ayşe force-pushed". A push says whether it was forced itself, in words,
- * so the line reads well inside the parentheses `pull` puts around it.
+ * "Ayşe deployed version 15", "Marco's change, approved by Ayşe, version 15",
+ * or "Ayşe force-pushed". No phrase holds parentheses of its own, so it reads
+ * well inside the ones `pull` puts around it.
  */
 export function describeMovedBy(movedBy: MovedBy): string {
   if (movedBy.kind === 'push') {
     if (movedBy.name) return `${movedBy.name} ${movedBy.forced ? 'force-pushed' : 'pushed'}`
     return movedBy.forced ? 'A forced git push' : 'A git push'
   }
-  const version = movedBy.version === null ? '' : ` (version ${movedBy.version})`
+  const version = movedBy.version === null ? '' : `, version ${movedBy.version}`
   if (movedBy.kind === 'proposal') {
     const change = (movedBy.proposedBy && PROPOSERS[movedBy.proposedBy]) || 'An approved change'
     return `${change}, approved by ${movedBy.name ?? 'someone'}${version}`
