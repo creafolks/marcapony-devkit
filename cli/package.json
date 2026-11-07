@@ -1,6 +1,6 @@
 {
   "name": "marcapony",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "Marcapony CLI \u2014 link a project to an app environment and deploy it to Marcapony-hosted infrastructure",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.md",
