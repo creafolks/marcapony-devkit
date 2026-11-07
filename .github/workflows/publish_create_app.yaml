@@ -91,6 +91,28 @@ jobs:
         run: bunx tsc --noEmit && bun test && bun run build
         working-directory: create-app
 
+      # The CLI and SDK publish from their own workflows on the same merge, in
+      # parallel. A template whose ranges match nothing on npm yet would make
+      # every new scaffold fail to install, so wait (up to 15 minutes) until
+      # the versions the template pins are served.
+      - name: Wait for the CLI and SDK versions the template pins
+        if: steps.decide.outputs.publish == 'true'
+        working-directory: create-app
+        run: |
+          for pkg in marcapony marcapony-sdk; do
+            RANGE=$(node -p "const t=require('./template/base/_package.json'); (t.dependencies||{})['$pkg'] || (t.devDependencies||{})['$pkg'] || ''")
+            [ -z "$RANGE" ] && continue
+            for i in $(seq 1 90); do
+              if [ -n "$(npm view "$pkg@$RANGE" version 2>/dev/null)" ]; then
+                echo "$pkg@$RANGE is on npm"
+                continue 2
+              fi
+              sleep 10
+            done
+            echo "$pkg@$RANGE is still not on npm; not publishing a template that cannot install."
+            exit 1
+          done
+
       - name: Publish
         if: steps.decide.outputs.publish == 'true'
         run: npm publish --access public
