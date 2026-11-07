@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { collectAssets } from './assets.js'
@@ -57,6 +58,8 @@ export interface DeployOptions {
   source?: boolean
   /** Replace commits on the branch that this project has not pulled. */
   force?: boolean
+  /** Use the one-time direct deploy allowed in the dashboard (release-only production). */
+  direct?: boolean
   /** Warn when the app key expires within 14 days (one extra request after the deploy). */
   checkKeyExpiry?: boolean
   /** Injected in tests. */
@@ -129,6 +132,7 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   }
   const apiRoot = resolveApiRoot(options.cliEnv)
   const force = options.force === true
+  const direct = options.direct === true
 
   const disabledReason = sourcePushDisabledReason(options)
   const sourceFiles = disabledReason ? null : safeCollect(options.cwd, config, log)
@@ -139,16 +143,19 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   const sync = head?.enabled && head.environmentId ? head : null
   const base = sync ? resolveBase(options.cwd, sync, force) : undefined
   const declarations = declarationsOf(config)
-  await validateDeployment(
-    apiRoot,
-    apiKey,
-    {
-      ...(isManifestV2(config) ? { manifest: manifestOf(config) } : declarations),
-      withSource: !!sourceFiles && sourceFiles.length > 0,
-      ...(base !== undefined ? { baseSourceRef: base } : {}),
-      ...(force ? { force: true } : {}),
-    },
-    fetchImpl,
+  await withReleaseHint(direct, () =>
+    validateDeployment(
+      apiRoot,
+      apiKey,
+      {
+        ...(isManifestV2(config) ? { manifest: manifestOf(config) } : declarations),
+        withSource: !!sourceFiles && sourceFiles.length > 0,
+        ...(base !== undefined ? { baseSourceRef: base } : {}),
+        ...(force ? { force: true } : {}),
+        ...(direct ? { direct: true } : {}),
+      },
+      fetchImpl,
+    ),
   )
 
   // The repo was over its limit when last measured: deploys with source are
@@ -171,7 +178,8 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
       `Server module not found at ${serverPath}. Check the "${field}" path in marcapony.json.`,
     )
   }
-  const worker = readFileSync(workerPath).toString('base64')
+  const workerBytes = readFileSync(workerPath)
+  const worker = workerBytes.toString('base64')
 
   let assets: ReturnType<typeof collectAssets> | undefined
   const publicDir = publicDirOf(config, options.cwd)
@@ -197,7 +205,15 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   const parent = sync ? (force ? sync.head : (base ?? null)) : undefined
   let source: DeploymentSource | null = null
   if (sourceFiles && sourceFiles.length > 0) {
-    source = await trySourcePush({ options, apiRoot, apiKey, files: sourceFiles, parent, log })
+    source = await trySourcePush({
+      options,
+      apiRoot,
+      apiKey,
+      files: sourceFiles,
+      parent,
+      log,
+      bundleHash: bundleHashOf(workerBytes, assets ?? []),
+    })
   } else if (sourceFiles) {
     log('Source not saved: no files left after the ignore rules')
   } else if (disabledReason) {
@@ -222,11 +238,13 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
         ...(source ? { source } : {}),
         ...(base !== undefined ? { baseSourceRef: base } : {}),
         ...(force ? { force: true } : {}),
+        ...(direct ? { direct: true } : {}),
       },
       fetchImpl,
       options.sleep,
     )
   } catch (err) {
+    if (err instanceof CliError && err.code === 'release_only') throw releaseOnlyError(err, direct)
     if (err instanceof CliError && err.code === 'source_quota_exceeded') {
       throw new CliError(
         `${err.message}. The app's Code tab in the dashboard shows the repo's size.`,
@@ -273,6 +291,46 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     await warnIfKeyExpiring(apiRoot, apiKey, fetchImpl, log, options.now?.() ?? new Date())
   }
   return { deployment, source, base: base ?? null, forced: force }
+}
+
+/**
+ * A production that goes live through releases refuses a plain deploy with
+ * 409 `release_only`. The platform's message says what to do in the
+ * dashboard; this adds the terminal side.
+ */
+function releaseOnlyError(err: CliError, direct: boolean): CliError {
+  const hint = direct
+    ? 'Allow a one-time direct deploy on the app page in the dashboard (it stays valid for 30 minutes), then run `marcapony app deploy --direct` again.'
+    : 'To ship a hotfix straight to production instead, allow a one-time direct deploy on the app page and run `marcapony app deploy --direct`.'
+  return new CliError(`${err.message} ${hint}`, {
+    code: err.code,
+    status: err.status,
+    exitCode: EXIT.refused,
+  })
+}
+
+async function withReleaseHint<T>(direct: boolean, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (err) {
+    if (err instanceof CliError && err.code === 'release_only') throw releaseOnlyError(err, direct)
+    throw err
+  }
+}
+
+/**
+ * The bundle's sha256 the way the platform computes it for the deployment:
+ * the server module's bytes, then each public file's bytes in upload order,
+ * as one stream. Paths are not part of it.
+ */
+export function bundleHashOf(
+  workerBytes: Uint8Array,
+  assets: ReadonlyArray<{ content: string }>,
+): string {
+  const hash = createHash('sha256')
+  hash.update(workerBytes)
+  for (const asset of assets) hash.update(Buffer.from(asset.content, 'base64'))
+  return hash.digest('hex')
 }
 
 export const KEY_EXPIRY_WARNING_DAYS = 14
@@ -409,8 +467,9 @@ async function trySourcePush(args: {
   /** Undefined on a platform older than the sync rule: push on the remote head as before. */
   parent: string | null | undefined
   log: (message: string) => void
+  bundleHash: string
 }): Promise<DeploymentSource | null> {
-  const { options, apiRoot, apiKey, files, parent, log } = args
+  const { options, apiRoot, apiKey, files, parent, log, bundleHash } = args
   const fetchImpl = options.fetchImpl ?? fetch
   try {
     const findings = scanForSecrets(options.cwd, files)
@@ -435,7 +494,9 @@ async function trySourcePush(args: {
         )
       }
     }
-    const grant = await fetchSourceGrant(apiRoot, apiKey, fetchImpl, options.sleep)
+    const grant = await fetchSourceGrant(apiRoot, apiKey, fetchImpl, options.sleep, {
+      direct: options.direct === true,
+    })
     if (!grant) {
       log('Source not saved: this environment does not store source yet')
       return null
@@ -450,6 +511,7 @@ async function trySourcePush(args: {
         // An older platform knows no base: its grant's head, else the remote head.
         parent: parent === undefined ? (grant.headBefore ?? undefined) : parent,
         message: options.message,
+        bundleHash,
       })
     } finally {
       // Revokes the token at once instead of leaving it to expire.

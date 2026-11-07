@@ -209,6 +209,13 @@ export interface PushSourceOptions {
    */
   parent: string | null | undefined
   message?: string
+  /**
+   * The sha256 of the bundle this commit is deployed with (the server module,
+   * then each public file, in upload order). Written as a `Bundle-Hash`
+   * trailer so the platform can check that a CLI deploy's commit and bundle
+   * belong together.
+   */
+  bundleHash?: string
   /** Injected in tests; defaults to isomorphic-git's network operations. */
   push?: typeof git.push
   fetch?: typeof git.fetch
@@ -221,6 +228,12 @@ export function tokenSecret(token: string): string {
 
 /** Git refused the push because the branch has commits the parent does not. */
 export class SourcePushRejectedError extends Error {}
+
+/** The commit message, with the `Bundle-Hash` trailer in its own last paragraph. */
+export function commitMessage(message: string | undefined, bundleHash?: string): string {
+  const subject = message?.trim() || 'marcapony app deploy'
+  return bundleHash ? `${subject}\n\nBundle-Hash: ${bundleHash}\n` : subject
+}
 
 /**
  * Commit the collected files on top of `parent` and push. Returns the new
@@ -288,7 +301,7 @@ export async function pushSource(options: PushSourceOptions): Promise<string> {
     const oid = await git.commit({
       ...common,
       ref: `refs/heads/${grant.branch}`,
-      message: options.message?.trim() || 'marcapony app deploy',
+      message: commitMessage(options.message, options.bundleHash),
       author: { name: 'Marcapony CLI', email: 'cli@marcapony.com' },
       parent: commitParent ? [commitParent] : [],
     })
