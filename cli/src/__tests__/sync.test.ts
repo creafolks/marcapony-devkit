@@ -426,6 +426,22 @@ describe('runPull', () => {
     expect(result.status).toBe('conflicts')
     expect(result.files).toEqual([{ path: 'src/app.ts', action: 'conflict', conflicts: 1 }])
     expect(readFileSync(join(dir, 'src', 'app.ts'), 'utf8')).toContain('<<<<<<< yours')
+    expect(result.conflicts).toEqual({
+      headCommit: sha('a'),
+      files: [
+        {
+          path: 'src/app.ts',
+          regions: [
+            {
+              id: 0,
+              base: 'export const a = 1\n',
+              ours: 'export const a = 3\n',
+              theirs: 'export const a = 2\n',
+            },
+          ],
+        },
+      ],
+    })
   })
 
   it('only moves the base when the files already contain the change', async () => {
