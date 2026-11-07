@@ -636,5 +636,8 @@ describe('describeMovedBy', () => {
         forced: false,
       }),
     ).toBe("An AI agent's change, approved by someone")
+    expect(
+      describeMovedBy({ kind: 'proposal', name: 'Ayşe', version: 3, at: 'x', forced: false }),
+    ).toBe('An approved change, approved by Ayşe (version 3)')
   })
 })

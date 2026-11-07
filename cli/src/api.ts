@@ -126,7 +126,7 @@ const PROPOSERS: Record<NonNullable<MovedBy['proposedBy']>, string> = {
 export function describeMovedBy(movedBy: MovedBy): string {
   const version = movedBy.version === null ? '' : ` (version ${movedBy.version})`
   if (movedBy.kind === 'proposal') {
-    const change = PROPOSERS[movedBy.proposedBy ?? 'system'] ?? 'An approved change'
+    const change = (movedBy.proposedBy && PROPOSERS[movedBy.proposedBy]) || 'An approved change'
     return `${change}, approved by ${movedBy.name ?? 'someone'}${version}`
   }
   return movedBy.version === null
