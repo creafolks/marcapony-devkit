@@ -1,5 +1,7 @@
 /** Thin HTTP layer over the endpoints the CLI uses. Zero dependencies. */
 
+import { SDK_VERSION_HEADER, cliFetch } from './client-info.js'
+
 export interface LinkResponse {
   appSlug: string | null
   environmentName: string
@@ -26,6 +28,21 @@ export interface DeploymentView {
   createdAt?: string
   /** Things the deploy did not fail on but the owner should fix, such as a required value not set. */
   warnings?: string[]
+  /**
+   * Newer versions of the CLI or the SDK, as structured data; the same text is
+   * in `warnings`. Absent on platforms that do not send notices.
+   */
+  notices?: DeployNotice[]
+}
+
+/** A newer CLI or SDK is available. Informational: it never blocks a deploy. */
+export interface DeployNotice {
+  kind: 'cli_update' | 'sdk_update'
+  /** The version in use; null when the platform could not tell. */
+  current: string | null
+  latest: string
+  /** The command that updates it. */
+  command: string
 }
 
 export interface DeploymentRequest {
@@ -240,7 +257,7 @@ async function failure(res: Response): Promise<CliError> {
 export async function exchangeCode(
   apiRoot: string,
   code: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
   options: { ci?: boolean } = {},
 ): Promise<LinkResponse> {
   const res = await fetchImpl(`${apiRoot}/apps/link`, {
@@ -262,14 +279,20 @@ export async function createDeployment(
   apiRoot: string,
   apiKey: string,
   payload: DeploymentRequest,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+  options: { sdkVersion?: string | null } = {},
 ): Promise<DeploymentView> {
   let waited = 0
   for (;;) {
     const res = await fetchImpl(`${apiRoot}/ext/v1/deployments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        // The project's SDK version, so the platform can say when a newer one is out.
+        ...(options.sdkVersion ? { [SDK_VERSION_HEADER]: options.sdkVersion } : {}),
+      },
       body: JSON.stringify(payload),
     })
     if (res.ok) return ((await res.json()) as { data: DeploymentView }).data
@@ -286,7 +309,7 @@ export async function fetchDeployment(
   apiRoot: string,
   apiKey: string,
   id: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<DeploymentView> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/${id}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -298,7 +321,7 @@ export async function fetchDeployment(
 export async function fetchCapabilities(
   apiRoot: string,
   apiKey: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<Capability[]> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/capabilities`, {
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -318,7 +341,7 @@ export async function fetchCapabilities(
 export async function fetchSourceGrant(
   apiRoot: string,
   apiKey: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
   options: { direct?: boolean } = {},
 ): Promise<SourceGrant | null> {
@@ -345,7 +368,7 @@ export async function closeSourceGrant(
   apiRoot: string,
   apiKey: string,
   grantId: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<{ outcome: string | null; headAfter: string | null }> {
   const res = await fetchImpl(
     `${apiRoot}/ext/v1/deployments/source-token/${encodeURIComponent(grantId)}/close`,
@@ -359,7 +382,7 @@ export async function closeSourceGrant(
 export async function fetchSourceReadGrant(
   apiRoot: string,
   apiKey: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<SourceReadGrant | null> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/source-read-token`, {
     method: 'POST',
@@ -377,7 +400,7 @@ export async function fetchSourceReadGrant(
 export async function fetchSourceHead(
   apiRoot: string,
   apiKey: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<SourceHead | null> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/source-head`, {
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -401,7 +424,7 @@ export async function validateDeployment(
   apiRoot: string,
   apiKey: string,
   payload: ValidateRequest,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<boolean> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/validate`, {
     method: 'POST',
@@ -421,7 +444,7 @@ export async function validateDeployment(
 export async function retirePreviousKeys(
   apiRoot: string,
   apiKey: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<number | null> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/keys/retire-previous`, {
     method: 'POST',
@@ -440,7 +463,7 @@ export async function retirePreviousKeys(
 export async function fetchKeyInfo(
   apiRoot: string,
   apiKey: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<KeyInfo | null> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/keys/current`, {
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -481,7 +504,7 @@ export interface HandedOverChangeDetail extends HandedOverChange {
 export async function fetchHandedOverChanges(
   apiRoot: string,
   apiKey: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<HandedOverChange[]> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/proposals`, {
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -495,7 +518,7 @@ export async function fetchHandedOverChange(
   apiRoot: string,
   apiKey: string,
   id: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<HandedOverChangeDetail> {
   const res = await fetchImpl(`${apiRoot}/ext/v1/proposals/${encodeURIComponent(id)}`, {
     headers: { Authorization: `Bearer ${apiKey}` },

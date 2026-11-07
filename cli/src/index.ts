@@ -17,6 +17,8 @@ import { runSourceDryRun } from './source-command.js'
 import { runScan } from './scan.js'
 import { runLogin, runLoginStatus, runLogout } from './login.js'
 import { runRelease, runReleaseList, runReleaseRetry, runRollback } from './release.js'
+import { CLI_VERSION } from './client-info.js'
+import { serverCliNoticeSeen, startUpdateCheck } from './update-check.js'
 
 export { runLink } from './link.js'
 export { runClone } from './clone.js'
@@ -39,10 +41,9 @@ export * from './config.js'
 export * from './api.js'
 export * from './assets.js'
 export * from './agents.js'
+export { CLI_VERSION, projectSdkVersion, userAgent, withCliHeaders } from './client-info.js'
 
-// Kept in step with cli/package.json by a test — `marcapony --version` is the
-// first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.11.3'
+const VERSION = CLI_VERSION
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
@@ -177,6 +178,11 @@ Options
   -h, --help        Show this help
   -v, --version     Show the CLI version
 
+Updates
+  Once a day the CLI checks npm for a newer version and prints one line on
+  stderr when there is one. It never checks with --json or in CI; set
+  MARCAPONY_NO_UPDATE_CHECK=1 to turn it off.
+
 Exit codes
   0 done, 1 error, 2 the environment has changes to pull, 3 conflicts to
   resolve, 4 refused by the platform, 5 project not linked, 6 the secret
@@ -252,6 +258,15 @@ export async function main(argv: string[]): Promise<number> {
     return 0
   }
 
+  // Started now so the registry answer arrives while the command runs; the
+  // line, if any, is printed after the command's own output.
+  const finishUpdateCheck = startUpdateCheck({ env: process.env, json: flags.json === true })
+  const code = await run(command, flags)
+  await finishUpdateCheck(serverCliNoticeSeen())
+  return code
+}
+
+async function run(command: string[], flags: Record<string, string | boolean>): Promise<number> {
   const [namespace, action] = command
   const cwd = stringFlag(flags, 'cwd') ?? process.cwd()
   // Hidden, undocumented team escape hatch: point the CLI at a non-production

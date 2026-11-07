@@ -15,6 +15,7 @@ import {
   planThreeWay,
   writePlan,
 } from './three-way.js'
+import { cliFetch } from './client-info.js'
 
 /**
  * `marcapony app proposals`: changes the app's owner approved in the panel
@@ -78,7 +79,7 @@ export async function runProposalsList(
 ): Promise<{ proposals: HandedOverChange[] }> {
   const log = options.log ?? console.log
   const { apiRoot, apiKey } = await linked(options)
-  const proposals = await fetchHandedOverChanges(apiRoot, apiKey, options.fetchImpl ?? fetch)
+  const proposals = await fetchHandedOverChanges(apiRoot, apiKey, options.fetchImpl ?? cliFetch)
   if (proposals.length === 0) {
     log('No changes are waiting for this environment.')
     return { proposals }
@@ -103,7 +104,7 @@ export async function runProposalPull(options: ProposalPullOptions): Promise<Pro
     apiRoot,
     apiKey,
     options.id,
-    options.fetchImpl ?? fetch,
+    options.fetchImpl ?? cliFetch,
   )
 
   const encoder = new TextEncoder()

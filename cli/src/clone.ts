@@ -8,6 +8,7 @@ import { readConfig, resolveApiRoot } from './config.js'
 import { retireEarlierKeys, writeAgentsBestEffort, writeLinkedKey } from './link.js'
 import { writeBase } from './lock.js'
 import { tokenSecret } from './source.js'
+import { cliFetch } from './client-info.js'
 
 export interface CloneOptions {
   /** Where the clone goes: a new or empty directory. */
@@ -49,7 +50,7 @@ export async function runClone(options: CloneOptions): Promise<CloneResult> {
     throw new CliError('Usage: marcapony app clone <dir> --code <code>', { exitCode: EXIT.failed })
   }
   const apiRoot = resolveApiRoot(options.cliEnv)
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
 
   // Checked before the pairing code is used: a code is spent once.
   const name = options.dir

@@ -28,6 +28,7 @@ import {
   writeEnvFile,
   type MarcaponyConfig,
 } from './config.js'
+import { cliFetch } from './client-info.js'
 
 export interface LinkOptions {
   cwd: string
@@ -83,7 +84,7 @@ export async function runLink(options: LinkOptions): Promise<void> {
   const code = (options.code ?? (await prompt('Pairing code: '))).trim()
   if (!code) throw new Error('A pairing code is required. Generate one from the app page.')
 
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
   const result = await exchangeCode(apiRoot, code, fetchImpl, { ci: options.ci === true })
 
   const existing = readConfig(options.cwd)
@@ -233,7 +234,7 @@ async function choose<T>(
  */
 async function runLoginLink(options: LoginLinkContext): Promise<void> {
   const { log, prompt, apiRoot } = options
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
   const login = await pickLogin(apiRoot, {
     account: options.account,
     ...options.credentialDeps,

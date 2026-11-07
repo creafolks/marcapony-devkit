@@ -1,4 +1,5 @@
 import { CliError } from './api.js'
+import { cliFetch } from './client-info.js'
 
 /**
  * The platform routes behind `marcapony login`: the device flow, the login
@@ -126,7 +127,7 @@ async function call<T>(
 export function requestDeviceCode(
   apiRoot: string,
   client: { clientName: string; hostname?: string; os?: string; cliVersion?: string },
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<DeviceCode> {
   return call(fetchImpl, `${apiRoot}/cli/device-codes`, {
     method: 'POST',
@@ -145,7 +146,7 @@ export type PollResult =
 export async function pollDeviceToken(
   apiRoot: string,
   deviceCode: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<PollResult> {
   try {
     return {
@@ -171,13 +172,13 @@ export interface LoginMe {
   credential: { id: string; clientName: string | null; expiresAt: string | null }
 }
 
-export const fetchMe = (apiRoot: string, credential: string, fetchImpl: typeof fetch = fetch) =>
+export const fetchMe = (apiRoot: string, credential: string, fetchImpl: typeof fetch = cliFetch) =>
   call<LoginMe>(fetchImpl, `${apiRoot}/ext/v1/cli/me`, { credential })
 
 export const fetchLinkableApps = async (
   apiRoot: string,
   credential: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ): Promise<LinkableApp[]> =>
   (await call<{ apps: LinkableApp[] }>(fetchImpl, `${apiRoot}/ext/v1/cli/apps`, { credential }))
     .apps
@@ -186,7 +187,7 @@ export const mintSessionKey = (
   apiRoot: string,
   credential: string,
   target: { appId: string; environment: string },
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) =>
   call<MintedKey>(fetchImpl, `${apiRoot}/ext/v1/cli/sessions`, {
     method: 'POST',
@@ -198,7 +199,7 @@ export const mintDevKey = (
   apiRoot: string,
   credential: string,
   target: { appId: string; environment: string },
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) =>
   call<MintedKey>(fetchImpl, `${apiRoot}/ext/v1/cli/dev-keys`, {
     method: 'POST',
@@ -210,7 +211,7 @@ export const revokeOldKey = (
   apiRoot: string,
   credential: string,
   key: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) =>
   call<{ revoked: boolean }>(fetchImpl, `${apiRoot}/ext/v1/cli/keys/revoke`, {
     method: 'POST',
@@ -221,7 +222,7 @@ export const revokeOldKey = (
 export const revokeCurrentLogin = (
   apiRoot: string,
   credential: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) =>
   call<{ revoked: boolean }>(fetchImpl, `${apiRoot}/ext/v1/cli/credentials/current`, {
     method: 'DELETE',
@@ -235,7 +236,7 @@ export const listReleases = (
   apiRoot: string,
   credential: string,
   appId: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) => call<Release[]>(fetchImpl, releases(apiRoot, appId), { credential })
 
 export const getRelease = (
@@ -243,7 +244,7 @@ export const getRelease = (
   credential: string,
   appId: string,
   releaseId: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) => call<Release>(fetchImpl, `${releases(apiRoot, appId)}/${releaseId}`, { credential })
 
 export const previewRelease = (
@@ -251,7 +252,7 @@ export const previewRelease = (
   credential: string,
   appId: string,
   deploymentId: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) =>
   call<ReleasePreview>(
     fetchImpl,
@@ -275,7 +276,7 @@ export const createRelease = (
   credential: string,
   appId: string,
   body: CreateReleaseBody,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) =>
   call<Release>(fetchImpl, releases(apiRoot, appId), {
     method: 'POST',
@@ -288,7 +289,7 @@ export const retryRelease = (
   credential: string,
   appId: string,
   releaseId: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = cliFetch,
 ) =>
   call<Release>(fetchImpl, `${releases(apiRoot, appId)}/${releaseId}/retry`, {
     method: 'POST',

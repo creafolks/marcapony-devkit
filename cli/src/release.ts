@@ -12,6 +12,7 @@ import {
   type ReleasePreview,
 } from './login-api.js'
 import { readProjectLink } from './project-link.js'
+import { cliFetch } from './client-info.js'
 
 /**
  * Releases from the terminal: `marcapony app release`, `release list`,
@@ -74,7 +75,7 @@ async function context(options: ReleaseOptions): Promise<{
     appId: project.appId,
     appSlug: project.appSlug,
     log: options.log ?? console.log,
-    fetchImpl: options.fetchImpl ?? fetch,
+    fetchImpl: options.fetchImpl ?? cliFetch,
   }
 }
 

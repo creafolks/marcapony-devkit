@@ -16,6 +16,7 @@ import {
   validateDeployment,
   type DeploymentRequest,
   type DeploymentSource,
+  type DeployNotice,
   type DeploymentView,
   type SourceHead,
 } from './api.js'
@@ -40,6 +41,8 @@ import {
   type PushSourceOptions,
 } from './source.js'
 import { formatSourceUsage, isOverSourceLimit } from './usage.js'
+import { cliFetch, projectSdkVersion } from './client-info.js'
+import { noteServerCliNotice } from './update-check.js'
 
 export interface DeployOptions {
   cwd: string
@@ -73,6 +76,8 @@ export interface DeployResult {
   source: DeploymentSource | null
   base: string | null
   forced: boolean
+  /** Newer CLI or SDK versions the platform pointed out; empty when there are none. */
+  notices: DeployNotice[]
 }
 
 /**
@@ -116,7 +121,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeploymentView>
 
 export async function runDeployDetailed(options: DeployOptions): Promise<DeployResult> {
   const log = options.log ?? console.log
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
   const config = readConfig(options.cwd)
   if (!config) {
     throw new CliError('No marcapony.json found. Run `marcapony app link` first.', {
@@ -243,6 +248,7 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
       },
       fetchImpl,
       options.sleep,
+      { sdkVersion: projectSdkVersion(options.cwd) },
     )
   } catch (err) {
     if (err instanceof CliError && err.code === 'release_only') throw releaseOnlyError(err, direct)
@@ -261,13 +267,18 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     writeBase(options.cwd, sync.environmentId, newBase)
   }
 
+  // A poll answers with the deployment alone; what the deploy said comes from its own answer.
+  const warnings = deployment.warnings ?? []
+  const notices = deployment.notices ?? []
+  if (notices.some((notice) => notice.kind === 'cli_update')) noteServerCliNotice()
+
   const sleep = options.sleep ?? defaultSleep
   for (let i = 0; deployment.status === 'uploading' && i < POLL_ATTEMPTS; i++) {
     await sleep(POLL_INTERVAL_MS)
     deployment = await fetchDeployment(apiRoot, apiKey, deployment.id, fetchImpl)
   }
 
-  for (const warning of deployment.warnings ?? []) log(`Warning: ${warning}`)
+  for (const warning of warnings) log(`Warning: ${warning}`)
 
   if (deployment.status === 'failed') {
     throw new Error(`Deploy failed: ${deployment.error ?? 'unknown error'}`)
@@ -291,7 +302,13 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   if (options.checkKeyExpiry) {
     await warnIfKeyExpiring(apiRoot, apiKey, fetchImpl, log, options.now?.() ?? new Date())
   }
-  return { deployment, source, base: base ?? null, forced: force }
+  return {
+    deployment: { ...deployment, warnings, notices },
+    source,
+    base: base ?? null,
+    forced: force,
+    notices,
+  }
 }
 
 /**
@@ -472,7 +489,7 @@ async function trySourcePush(args: {
   bundleHash: string
 }): Promise<DeploymentSource | null> {
   const { options, apiRoot, apiKey, files, parent, log, bundleHash } = args
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
   try {
     const findings = scanForSecrets(options.cwd, files)
     const blocking = blockingFindings(findings)
