@@ -183,12 +183,35 @@ describe('marcapony git-credential', () => {
     ])
   })
 
-  it('prefers the login over the deploy key', async () => {
+  it("uses the folder's deploy key before a login to another business", async () => {
     linkWithKey()
     const { index, store } = loggedIn()
     const { fetch, calls } = sessionFetch()
-    await get(request, { fetchImpl: fetch, index, store })
-    expect(calls[0]?.auth).toBe(`Bearer ${LOGIN}`)
+    const { code, out } = await get(request, { fetchImpl: fetch, index, store })
+    expect(code).toBe(EXIT.ok)
+    expect(out).toContain(`password=${SESSION.password}`)
+    expect(calls.map((c) => c.auth)).toEqual([`Bearer ${KEY}`])
+  })
+
+  it('uses the login in a folder linked with it, and the folder key when the login does not reach the app', async () => {
+    linkWithLogin()
+    writeFileSync(join(dir, '.env.local'), `MARCAPONY_API_KEY=${KEY}\n`)
+    const { index, store } = loggedIn()
+    const calls: string[] = []
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const auth = new Headers(init?.headers).get('Authorization') ?? ''
+      calls.push(auth)
+      return auth === `Bearer ${LOGIN}`
+        ? Response.json(
+            { error: { code: 'not_found', message: 'No such app in this account' } },
+            { status: 404 },
+          )
+        : Response.json({ data: SESSION }, { status: 201 })
+    }) as typeof fetch
+    const { code, out } = await get(request, { fetchImpl, index, store })
+    expect(code).toBe(EXIT.ok)
+    expect(out).toContain(`password=${SESSION.password}`)
+    expect(calls).toEqual([`Bearer ${LOGIN}`, `Bearer ${KEY}`])
   })
 
   it('stays silent for other hosts and when it has no credential', async () => {

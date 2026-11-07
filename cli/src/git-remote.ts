@@ -231,14 +231,14 @@ export async function runRemoteAdd(
 
   // A session proves the credential works here before anything is written,
   // and the platform names the remote. Its password is not kept.
-  const bearer = await credentialFor(target.apiRoot, options.cwd, options.env, options)
-  if (!bearer) {
+  const bearers = await credentialsFor(target.apiRoot, options.cwd, options.env, options)
+  if (bearers.length === 0) {
     throw new CliError('Not logged in, and this folder has no deploy key. Run `marcapony login`.', {
       code: 'login_required',
       exitCode: EXIT.loginRequired,
     })
   }
-  const session = await mintGitSession(target.apiRoot, bearer, target.appId, options.fetchImpl)
+  const session = await mintWithAny(target.apiRoot, bearers, target.appId, options.fetchImpl)
   const url = session.remote
 
   const existing = git(['remote', 'get-url', name], options.cwd)
@@ -317,32 +317,59 @@ export async function runRemoteRemove(options: {
 }
 
 /**
- * The bearer a git session is minted with, in the deploy precedence:
- * `MARCAPONY_API_KEY` from the environment when it is not the folder's own
- * key (CI and agents), then the login, then the folder's deploy key. Null
- * when there is none. A folder's data-only dev key is refused by the
- * platform, which says so.
+ * The bearers a git session may be minted with, best first:
+ * 1. `MARCAPONY_API_KEY` from the environment when it is not the folder's own
+ *    key (CI and agents);
+ * 2. in a folder linked with a login (`.marcapony/project.json` for this
+ *    API), that login, then the folder's key;
+ * 3. in a folder linked with a deploy key, that key, then a login: a login
+ *    to another business must not stand in for the folder's own key;
+ * 4. with no link, the only login for this API.
+ * A folder's data-only dev key is refused by the platform, which says so.
  */
-async function credentialFor(
+async function credentialsFor(
   apiRoot: string,
   cwd: string,
   env: NodeJS.ProcessEnv,
   deps: CredentialDeps,
-): Promise<string | null> {
+): Promise<string[]> {
+  const out: string[] = []
   const folderKey = resolveApiKey(cwd, {})
-  if (env.MARCAPONY_API_KEY && env.MARCAPONY_API_KEY !== folderKey) return env.MARCAPONY_API_KEY
+  if (env.MARCAPONY_API_KEY && env.MARCAPONY_API_KEY !== folderKey) out.push(env.MARCAPONY_API_KEY)
   const project = readProjectLink(cwd)
-  try {
-    const login = await pickLogin(apiRoot, {
-      ...deps,
-      project: project && project.apiRoot === apiRoot ? project : null,
-    })
-    return login.credential
-  } catch (err) {
-    // No login, or several without a linked project to choose: the key decides.
-    if (!(err instanceof CliError)) throw err
+  const linkedWithLogin = project !== null && project.apiRoot === apiRoot
+  const login = async (): Promise<string | null> => {
+    try {
+      return (await pickLogin(apiRoot, { ...deps, project: linkedWithLogin ? project : null }))
+        .credential
+    } catch (err) {
+      // No login, or several without a linked project to choose from.
+      if (!(err instanceof CliError)) throw err
+      return null
+    }
   }
-  return folderKey
+  const order = linkedWithLogin ? [await login(), folderKey] : [folderKey, await login()]
+  for (const bearer of order) if (bearer && !out.includes(bearer)) out.push(bearer)
+  return out
+}
+
+/** Mint with each bearer in turn; a 404 (not this app's credential) moves on to the next. */
+async function mintWithAny(
+  apiRoot: string,
+  bearers: string[],
+  appId: string,
+  fetchImpl?: typeof fetch,
+): Promise<GitSession> {
+  let last: unknown = null
+  for (const bearer of bearers) {
+    try {
+      return await mintGitSession(apiRoot, bearer, appId, fetchImpl)
+    } catch (err) {
+      last = err
+      if (!(err instanceof CliError && err.status === 404 && err.code)) throw err
+    }
+  }
+  throw last
 }
 
 /** Git's credential protocol: `key=value` lines, ended by a blank line or EOF. */
@@ -389,15 +416,15 @@ export async function runGitCredential(
     return EXIT.ok
   }
   const cwd = findProjectRoot(options.cwd) ?? options.cwd
-  const bearer = await credentialFor(apiRoot, cwd, options.env, options)
-  if (!bearer) {
+  const bearers = await credentialsFor(apiRoot, cwd, options.env, options)
+  if (bearers.length === 0) {
     options.warn(
       'marcapony: not logged in, and this folder has no deploy key. Run `marcapony login`.',
     )
     return EXIT.ok
   }
   try {
-    const session = await mintGitSession(apiRoot, bearer, appId, options.fetchImpl)
+    const session = await mintWithAny(apiRoot, bearers, appId, options.fetchImpl)
     const expiry = Math.floor(new Date(session.expiresAt).getTime() / 1000)
     options.write(
       `username=${session.username}\npassword=${session.password}\n${

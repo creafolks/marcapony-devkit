@@ -265,8 +265,10 @@ written to the repository's own git config, never your global one; `marcapony
 app remote remove` takes them out again.
 
 Each time git talks to the remote, the helper hands it a password valid for
-15 minutes, made from your `marcapony login` or, without one, from the
-folder's deploy key. A deploy key pushes only to its own environment; with a
+15 minutes. It is made from your `marcapony login` in a folder linked with the
+login, and from the folder's deploy key in a folder linked with a pairing code
+(your login is tried only when the key cannot reach the app).
+`MARCAPONY_API_KEY` from the environment comes first, for CI and agents. A deploy key pushes only to its own environment; with a
 login you can push to every environment of the app. Nothing else is stored.
 
 What a push does:
