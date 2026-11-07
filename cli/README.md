@@ -151,6 +151,11 @@ a change its author has not seen:
   the build and tells you who, with exit code 2. Run `marcapony app pull`, or
   `marcapony app deploy --force` to replace their changes (the dashboard shows
   that you did).
+- When the app's production goes live through releases (a version tested in
+  the test environment is promoted with **Canlıya al** in the dashboard), a
+  deploy with the production key is refused with exit code 4. For a hotfix,
+  the owner allows one direct deploy on the app page; it is valid for 30
+  minutes, and `marcapony app deploy --direct` uses it.
 - `marcapony app pull` merges the newer version into your files. Files you did
   not touch are updated; files both sides changed are merged, and overlapping
   changes get git's conflict markers (`<<<<<<<`, `|||||||`, `=======`,
@@ -290,6 +295,7 @@ supplied key already reaches.
 | `--message <text>` | Version message saved with the source (deploy only)   |
 | `--no-source`      | Do not save the project source with this deploy       |
 | `--force`          | Deploy over changes you have not pulled (deploy only) |
+| `--direct`         | Use a one-time direct deploy allowed on the app page (deploy only) |
 | `--patch`          | Print the remote changes as a patch (pull only)       |
 | `--check`          | Run the build after a pull (pull only)                |
 | `--yes`            | Never ask (pull and proposals pull)                   |

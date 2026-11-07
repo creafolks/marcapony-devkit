@@ -57,6 +57,8 @@ export interface DeployOptions {
   source?: boolean
   /** Replace commits on the branch that this project has not pulled. */
   force?: boolean
+  /** Use the one-time direct deploy allowed in the dashboard (release-only production). */
+  direct?: boolean
   /** Warn when the app key expires within 14 days (one extra request after the deploy). */
   checkKeyExpiry?: boolean
   /** Injected in tests. */
@@ -129,6 +131,7 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   }
   const apiRoot = resolveApiRoot(options.cliEnv)
   const force = options.force === true
+  const direct = options.direct === true
 
   const disabledReason = sourcePushDisabledReason(options)
   const sourceFiles = disabledReason ? null : safeCollect(options.cwd, config, log)
@@ -139,16 +142,19 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   const sync = head?.enabled && head.environmentId ? head : null
   const base = sync ? resolveBase(options.cwd, sync, force) : undefined
   const declarations = declarationsOf(config)
-  await validateDeployment(
-    apiRoot,
-    apiKey,
-    {
-      ...(isManifestV2(config) ? { manifest: manifestOf(config) } : declarations),
-      withSource: !!sourceFiles && sourceFiles.length > 0,
-      ...(base !== undefined ? { baseSourceRef: base } : {}),
-      ...(force ? { force: true } : {}),
-    },
-    fetchImpl,
+  await withReleaseHint(direct, () =>
+    validateDeployment(
+      apiRoot,
+      apiKey,
+      {
+        ...(isManifestV2(config) ? { manifest: manifestOf(config) } : declarations),
+        withSource: !!sourceFiles && sourceFiles.length > 0,
+        ...(base !== undefined ? { baseSourceRef: base } : {}),
+        ...(force ? { force: true } : {}),
+        ...(direct ? { direct: true } : {}),
+      },
+      fetchImpl,
+    ),
   )
 
   // The repo was over its limit when last measured: deploys with source are
@@ -222,11 +228,13 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
         ...(source ? { source } : {}),
         ...(base !== undefined ? { baseSourceRef: base } : {}),
         ...(force ? { force: true } : {}),
+        ...(direct ? { direct: true } : {}),
       },
       fetchImpl,
       options.sleep,
     )
   } catch (err) {
+    if (err instanceof CliError && err.code === 'release_only') throw releaseOnlyError(err, direct)
     if (err instanceof CliError && err.code === 'source_quota_exceeded') {
       throw new CliError(
         `${err.message}. The app's Code tab in the dashboard shows the repo's size.`,
@@ -273,6 +281,31 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     await warnIfKeyExpiring(apiRoot, apiKey, fetchImpl, log, options.now?.() ?? new Date())
   }
   return { deployment, source, base: base ?? null, forced: force }
+}
+
+/**
+ * A production that goes live through releases refuses a plain deploy with
+ * 409 `release_only`. The platform's message says what to do in the
+ * dashboard; this adds the terminal side.
+ */
+function releaseOnlyError(err: CliError, direct: boolean): CliError {
+  const hint = direct
+    ? 'Allow a one-time direct deploy on the app page in the dashboard (it stays valid for 30 minutes), then run `marcapony app deploy --direct` again.'
+    : 'To ship a hotfix straight to production instead, allow a one-time direct deploy on the app page and run `marcapony app deploy --direct`.'
+  return new CliError(`${err.message} ${hint}`, {
+    code: err.code,
+    status: err.status,
+    exitCode: EXIT.refused,
+  })
+}
+
+async function withReleaseHint<T>(direct: boolean, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (err) {
+    if (err instanceof CliError && err.code === 'release_only') throw releaseOnlyError(err, direct)
+    throw err
+  }
 }
 
 export const KEY_EXPIRY_WARNING_DAYS = 14
@@ -435,7 +468,9 @@ async function trySourcePush(args: {
         )
       }
     }
-    const grant = await fetchSourceGrant(apiRoot, apiKey, fetchImpl, options.sleep)
+    const grant = await fetchSourceGrant(apiRoot, apiKey, fetchImpl, options.sleep, {
+      direct: options.direct === true,
+    })
     if (!grant) {
       log('Source not saved: this environment does not store source yet')
       return null

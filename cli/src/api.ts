@@ -48,12 +48,24 @@ export interface DeploymentRequest {
   force?: boolean
   /** A version 2 marcapony.json, sent as written; the platform translates it. */
   manifest?: Record<string, unknown>
+  /**
+   * Use the one-time direct deploy the owner allowed in the dashboard, for a
+   * production that otherwise goes live through releases only.
+   */
+  direct?: boolean
 }
 
 /** What `POST /ext/v1/deployments/validate` checks before the build. */
 export type ValidateRequest = Pick<
   DeploymentRequest,
-  'placement' | 'dataAccess' | 'permissions' | 'portal' | 'baseSourceRef' | 'force' | 'manifest'
+  | 'placement'
+  | 'dataAccess'
+  | 'permissions'
+  | 'portal'
+  | 'baseSourceRef'
+  | 'force'
+  | 'manifest'
+  | 'direct'
 > & { withSource?: boolean }
 
 export interface DeploymentSource {
@@ -271,10 +283,12 @@ export async function fetchSourceGrant(
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+  options: { direct?: boolean } = {},
 ): Promise<SourceGrant | null> {
   let waited = 0
+  const query = options.direct ? '?direct=true' : ''
   for (;;) {
-    const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/source-token`, {
+    const res = await fetchImpl(`${apiRoot}/ext/v1/deployments/source-token${query}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
     })

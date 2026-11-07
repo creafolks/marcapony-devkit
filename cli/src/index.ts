@@ -44,7 +44,7 @@ const USAGE = `marcapony — build and deploy Marcapony apps
 Usage
   marcapony app link [--code <code>] [--ci] [--cwd <dir>]
   marcapony app clone <dir> --code <code>
-  marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--json]
+  marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--direct] [--json]
   marcapony app status [--cwd <dir>] [--json]
   marcapony app pull [--cwd <dir>] [--patch] [--check] [--yes] [--json]
   marcapony app proposals list [--json]
@@ -76,6 +76,10 @@ Commands
                MARCAPONY_SOURCE_PUSH=0 skips it every time. If someone
                deployed after this project's last sync, it stops before the
                build: pull first, or pass --force to replace their changes.
+               When production goes live through releases (promoted from
+               test in the dashboard), a deploy with the production key is
+               refused; --direct uses a one-time direct deploy the owner
+               allowed on the app page.
   app status   The environment's latest saved source, this project's base
                (marcapony.lock) and the next command to run.
   app pull     Merge the environment's newer changes into your files. Conflicts
@@ -116,6 +120,8 @@ Options
   --no-source       Do not save the project source with this deploy
   --force           Deploy even though the environment has changes you have not
                     pulled; they are replaced, and the panel shows who did it
+  --direct          Use the one-time direct deploy allowed on the app page, for a
+                    production that otherwise goes live through releases
   --patch           Print the remote changes as a patch instead of applying them
   --check           Run the project's build after a pull
   --yes             Never ask; merge into files with uncommitted changes
@@ -145,6 +151,7 @@ const BOOLEAN_FLAGS = new Set([
   'v',
   'no-source',
   'force',
+  'direct',
   'patch',
   'check',
   'yes',
@@ -246,6 +253,7 @@ export async function main(argv: string[]): Promise<number> {
         message: stringFlag(flags, 'message'),
         source: flags['no-source'] !== true,
         force: flags.force === true,
+        direct: flags.direct === true,
         checkKeyExpiry: true,
       })
       if (json) console.log(JSON.stringify({ ok: true, ...result }))
