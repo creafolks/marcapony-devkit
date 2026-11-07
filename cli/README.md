@@ -248,6 +248,45 @@ truth: when your files already contain a teammate's change, `pull` only moves
 the base. Giving each developer or agent an environment of its own (for
 example `test-ayse`) and meeting on `test` through pulls also works well.
 
+### Plain git: `git push` and `git fetch`
+
+The platform is also a git remote. In a linked project that is a git
+repository:
+
+```bash
+marcapony app remote add --env test
+git push marcapony
+```
+
+`remote add` adds a remote named `marcapony` (`--name` picks another) whose
+push goes to the branch of `--env`, or of the linked environment when it is
+left out, and sets this CLI as git's credential helper for that host. Both are
+written to the repository's own git config, never your global one; `marcapony
+app remote remove` takes them out again.
+
+Each time git talks to the remote, the helper hands it a password valid for
+15 minutes, made from your `marcapony login` or, without one, from the
+folder's deploy key. A deploy key pushes only to its own environment; with a
+login you can push to every environment of the app. Nothing else is stored.
+
+What a push does:
+
+- It lands only on the branch of an existing environment; an unknown branch,
+  a delete, a tag or several branches at once are refused.
+- A push that is not a fast-forward is refused (`git pull --rebase`, or
+  `marcapony app pull`, then push again). An environment where the owner
+  turned on "Zorla push'a izin ver" in the dashboard takes a forced push, and
+  the dashboard records it. Production and protected environments never do.
+- Production takes pushes only while the app does not go live through
+  releases; otherwise use `marcapony app release`.
+- The platform scans every push. Where the environment builds on push, a
+  clean push is built and deployed, and `git push` prints where to follow
+  the build. Each business has a daily build allowance; a push past it still
+  lands, without a build, and says so.
+
+`git fetch marcapony` shows each environment's branch once its latest commit
+has passed the scan.
+
 ## Settings and secrets
 
 An app often needs values of its own, such as a payment provider's key or a
@@ -366,6 +405,8 @@ supplied key already reaches.
 | `--patch`          | Print the remote changes as a patch (pull only)       |
 | `--check`          | Run the build after a pull (pull only)                |
 | `--yes`            | Never ask (pull and proposals pull)                   |
+| `--env <name>`     | The environment a remote pushes to (app remote add)   |
+| `--name <remote>`  | The git remote's name (app remote; default `marcapony`) |
 | `--json`           | Print the result as JSON                              |
 
 Requires Node 20+ or Bun.
