@@ -180,7 +180,7 @@ describe('runDeployDetailed with the sync rule', () => {
       log: () => {},
     }).catch((e: unknown) => e)
     expect((err as CliError).exitCode).toBe(EXIT.remoteChanges)
-    expect((err as CliError).message).toContain('A git push (forced) landed after your last sync')
+    expect((err as CliError).message).toContain('A forced git push landed after your last sync')
   })
 
   it("says an approved change landed, and who approved it, when the head is the platform's commit", async () => {
@@ -457,6 +457,31 @@ describe('runPull', () => {
     expect(readBase(dir, ENV_ID)?.base).toBe(sha('a'))
   })
 
+  it('names a forced git push without nested parentheses', async () => {
+    writeBase(dir, ENV_ID, sha('0'))
+    writeFileSync(join(dir, 'src', 'app.ts'), 'export const a = 1\n')
+    const { fetch } = pullRoutes(
+      headOf({
+        head: sha('a'),
+        movedBy: { kind: 'push', name: null, version: null, at: 'x', forced: true },
+      }),
+    )
+    const logged: string[] = []
+    await runPull({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: fetch,
+      log: (line: string) => logged.push(line),
+      useGit: false,
+      readRemote: remote(
+        { 'src/app.ts': 'export const a = 1\n' },
+        { 'src/app.ts': 'export const a = 2\n' },
+      ),
+    })
+    expect(logged[0]).toBe(`Pulled ${sha('a').slice(0, 7)} (A forced git push):`)
+  })
+
   it('leaves conflict markers and reports the conflicts', async () => {
     writeBase(dir, ENV_ID, sha('0'))
     writeFileSync(join(dir, 'src', 'app.ts'), 'export const a = 3\n')
@@ -577,6 +602,27 @@ describe('runStatus', () => {
     expect(result.state).toBe('behind')
     expect(result.next).toBe('marcapony app pull')
   })
+
+  it('adds ", forced" to a forced deploy but not to a push, which says it itself', async () => {
+    writeBase(dir, ENV_ID, sha('0'))
+    const lines = async (movedBy: SourceHead['movedBy']) => {
+      const logged: string[] = []
+      const r = router({ '/source-head': () => json({ data: headOf({ movedBy }) }) })
+      await runStatus({
+        cwd: dir,
+        cliEnv: 'local',
+        env: {},
+        fetchImpl: r.fetch,
+        log: (line: string) => logged.push(line),
+      })
+      return logged.map((l) => l.trim())
+    }
+    const push = await lines({ kind: 'push', name: null, version: null, at: 'x', forced: true })
+    expect(push).toContain('A forced git push')
+    expect(push.some((l) => l.includes(', forced'))).toBe(false)
+    const deploy = await lines({ name: 'Ayşe', version: 15, at: 'x', forced: true })
+    expect(deploy).toContain('Ayşe deployed version 15, forced')
+  })
 })
 
 describe('marcapony app env', () => {
@@ -664,10 +710,10 @@ describe('describeMovedBy', () => {
   it('names a git push whose build has not deployed yet', () => {
     expect(
       describeMovedBy({ kind: 'push', name: 'Ayşe', version: null, at: 'x', forced: true }),
-    ).toBe('Ayşe pushed (forced)')
+    ).toBe('Ayşe force-pushed')
     expect(
       describeMovedBy({ kind: 'push', name: null, version: null, at: 'x', forced: true }),
-    ).toBe('A git push (forced)')
+    ).toBe('A forced git push')
     expect(
       describeMovedBy({ kind: 'push', name: null, version: null, at: 'x', forced: false }),
     ).toBe('A git push')

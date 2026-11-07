@@ -434,7 +434,7 @@ function resolveBase(cwd: string, head: SourceHead, force: boolean): string | nu
   })
 }
 
-/** "A git push landed", "Ayşe pushed": only a sentence without a verb needs one. */
+/** "A forced git push landed", "Ayşe force-pushed": only a phrase without a verb needs one. */
 function landed(movedBy: NonNullable<SourceHead['movedBy']>): boolean {
   return movedBy.kind === 'proposal' || (movedBy.kind === 'push' && !movedBy.name)
 }
