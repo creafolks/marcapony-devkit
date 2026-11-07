@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CliError, EXIT, type SourceHead } from '../api'
+import { CliError, EXIT, describeMovedBy, type SourceHead } from '../api'
 import { runDeployDetailed } from '../deploy'
 import { readBase, writeBase } from '../lock'
 import { diffLines, mergeText, unifiedDiff } from '../merge'
@@ -161,6 +161,36 @@ describe('runDeployDetailed with the sync rule', () => {
     expect((err as CliError).message).toContain('Ayşe deployed version 15')
     expect(built).toEqual([])
     expect(calls.some((c) => c.url.endsWith('/source-token'))).toBe(false)
+  })
+
+  it("says an approved change landed, and who approved it, when the head is the platform's commit", async () => {
+    writeBase(dir, ENV_ID, sha('a'))
+    const { fetch } = deployRoutes(
+      headOf({
+        head: sha('b'),
+        movedBy: {
+          kind: 'proposal',
+          proposalId: 'p-1',
+          proposedBy: 'marco',
+          name: 'Ayşe',
+          version: 7,
+          at: '2026-11-07',
+          forced: false,
+        },
+      }),
+    )
+    const err = await runDeployDetailed({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: fetch,
+      runBuild: () => {},
+      log: () => {},
+    }).catch((e: unknown) => e)
+    expect((err as CliError).exitCode).toBe(EXIT.remoteChanges)
+    expect((err as CliError).message).toContain(
+      "Marco's change, approved by Ayşe (version 7) landed after your last sync",
+    )
   })
 
   it('asks for one pull when the project never synced with an environment that has source', async () => {
@@ -588,5 +618,23 @@ describe('marcapony app env', () => {
     }).catch((e: unknown) => e)
     expect((err as CliError).exitCode).toBe(EXIT.refused)
     expect(asked).toBe(false)
+  })
+})
+
+describe('describeMovedBy', () => {
+  it('names a deploy, an approved change and a change not built yet', () => {
+    expect(describeMovedBy({ name: 'Ayşe', version: 15, at: 'x', forced: false })).toBe(
+      'Ayşe deployed version 15',
+    )
+    expect(
+      describeMovedBy({
+        kind: 'proposal',
+        proposedBy: 'mcp',
+        name: null,
+        version: null,
+        at: 'x',
+        forced: false,
+      }),
+    ).toBe("An AI agent's change, approved by someone")
   })
 })
