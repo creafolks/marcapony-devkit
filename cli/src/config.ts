@@ -129,6 +129,10 @@ const API_ROOTS = {
 export type CliEnv = keyof typeof API_ROOTS
 const DEFAULT_CLI_ENV: CliEnv = 'production'
 
+export function isCliEnv(name: string): name is CliEnv {
+  return Object.hasOwn(API_ROOTS, name)
+}
+
 export function resolveApiRoot(cliEnv?: string): string {
   const name = (cliEnv ?? DEFAULT_CLI_ENV) as CliEnv
   const root = API_ROOTS[name]

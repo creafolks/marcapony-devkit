@@ -6,6 +6,7 @@ import { main, parseArgs } from '../index'
 import { parseEnvLines, resolveApiRoot, upsertEnvLines } from '../config'
 import { collectAssets, contentTypeFor, isIgnoredAsset, parseAssetsIgnore } from '../assets'
 import { runLink } from '../link'
+import { readSavedCliEnv, saveCliEnv } from '../cli-env'
 import { runDeploy } from '../deploy'
 import {
   collectSourceFiles,
@@ -781,6 +782,44 @@ describe('source push', () => {
     }
     expect(calls).toHaveLength(1)
     expect(calls[0]?.url).toBe('http://localhost:4000/ext/v1/deployments')
+  })
+
+  it('defaults to the API the project was linked with; an explicit --cli-env wins', async () => {
+    scaffold()
+    mkdirSync(join(dir, '.marcapony'), { recursive: true })
+    writeFileSync(join(dir, '.marcapony', 'cli.json'), '{"cliEnv":"local"}\n')
+    const { fetch: fetchImpl, calls } = makeFetch([live(), live()])
+    const realFetch = globalThis.fetch
+    const log = console.log
+    const error = console.error
+    const errors: string[] = []
+    globalThis.fetch = fetchImpl
+    console.log = (): void => {}
+    console.error = (m: string): void => {
+      errors.push(m)
+    }
+    try {
+      expect(await main(['app', 'deploy', '--no-source', '--cwd', dir])).toBe(0)
+      expect(
+        await main(['app', 'deploy', '--no-source', '--cwd', dir, '--cli-env', 'staging']),
+      ).toBe(0)
+    } finally {
+      globalThis.fetch = realFetch
+      console.log = log
+      console.error = error
+    }
+    expect(calls[0]?.url).toBe('http://localhost:4000/ext/v1/deployments')
+    expect(calls[1]?.url).toBe('https://staging-api.marcapony.com/ext/v1/deployments')
+    expect(errors.some((m) => m.includes('local API this project was linked with'))).toBe(true)
+  })
+
+  it('app link saves an explicit --cli-env in the project', () => {
+    saveCliEnv(dir, 'staging')
+    expect(readSavedCliEnv(dir)).toBe('staging')
+    saveCliEnv(dir, 'nowhere')
+    expect(readSavedCliEnv(dir)).toBe('staging')
+    writeFileSync(join(dir, '.marcapony', 'cli.json'), '{"cliEnv":"https://evil.example"}')
+    expect(readSavedCliEnv(dir)).toBeUndefined()
   })
 
   it('pushes the source with the granted token', async () => {
