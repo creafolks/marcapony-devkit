@@ -163,6 +163,26 @@ describe('runDeployDetailed with the sync rule', () => {
     expect(calls.some((c) => c.url.endsWith('/source-token'))).toBe(false)
   })
 
+  it('says a git push landed when a deploy key pushed and its build has not deployed yet', async () => {
+    writeBase(dir, ENV_ID, sha('a'))
+    const { fetch } = deployRoutes(
+      headOf({
+        head: sha('b'),
+        movedBy: { kind: 'push', name: null, version: null, at: '2026-11-08', forced: true },
+      }),
+    )
+    const err = await runDeployDetailed({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: fetch,
+      runBuild: () => {},
+      log: () => {},
+    }).catch((e: unknown) => e)
+    expect((err as CliError).exitCode).toBe(EXIT.remoteChanges)
+    expect((err as CliError).message).toContain('A git push (forced) landed after your last sync')
+  })
+
   it("says an approved change landed, and who approved it, when the head is the platform's commit", async () => {
     writeBase(dir, ENV_ID, sha('a'))
     const { fetch } = deployRoutes(
@@ -639,5 +659,23 @@ describe('describeMovedBy', () => {
     expect(
       describeMovedBy({ kind: 'proposal', name: 'Ayşe', version: 3, at: 'x', forced: false }),
     ).toBe('An approved change, approved by Ayşe (version 3)')
+  })
+
+  it('names a git push whose build has not deployed yet', () => {
+    expect(
+      describeMovedBy({ kind: 'push', name: 'Ayşe', version: null, at: 'x', forced: true }),
+    ).toBe('Ayşe pushed (forced)')
+    expect(
+      describeMovedBy({ kind: 'push', name: null, version: null, at: 'x', forced: true }),
+    ).toBe('A git push (forced)')
+    expect(
+      describeMovedBy({ kind: 'push', name: null, version: null, at: 'x', forced: false }),
+    ).toBe('A git push')
+  })
+
+  it('keeps the old wording for a head an older platform reports without a kind', () => {
+    expect(describeMovedBy({ name: null, version: null, at: 'x', forced: true })).toBe(
+      'Someone deployed',
+    )
   })
 })
