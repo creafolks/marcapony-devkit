@@ -102,6 +102,10 @@ Source saved: commit 1a2b3c4 (12 file(s))
 or `Source not saved:` with the reason. Saving the source never stops a deploy:
 if it fails, the deploy still goes live.
 
+The commit carries a `Bundle-Hash` trailer, the sha256 of the bundle the deploy
+uploads, so the platform can check that a version's code and bundle belong
+together before it releases that version to production.
+
 - Files ignored by `.gitignore` or `ignore` in `marcapony.json`, `node_modules`,
   the build output and credential files (`.env.local`, `.dev.vars`, keys) are
   never sent.

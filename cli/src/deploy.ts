@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { collectAssets } from './assets.js'
@@ -177,7 +178,8 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
       `Server module not found at ${serverPath}. Check the "${field}" path in marcapony.json.`,
     )
   }
-  const worker = readFileSync(workerPath).toString('base64')
+  const workerBytes = readFileSync(workerPath)
+  const worker = workerBytes.toString('base64')
 
   let assets: ReturnType<typeof collectAssets> | undefined
   const publicDir = publicDirOf(config, options.cwd)
@@ -203,7 +205,15 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
   const parent = sync ? (force ? sync.head : (base ?? null)) : undefined
   let source: DeploymentSource | null = null
   if (sourceFiles && sourceFiles.length > 0) {
-    source = await trySourcePush({ options, apiRoot, apiKey, files: sourceFiles, parent, log })
+    source = await trySourcePush({
+      options,
+      apiRoot,
+      apiKey,
+      files: sourceFiles,
+      parent,
+      log,
+      bundleHash: bundleHashOf(workerBytes, assets ?? []),
+    })
   } else if (sourceFiles) {
     log('Source not saved: no files left after the ignore rules')
   } else if (disabledReason) {
@@ -306,6 +316,21 @@ async function withReleaseHint<T>(direct: boolean, run: () => Promise<T>): Promi
     if (err instanceof CliError && err.code === 'release_only') throw releaseOnlyError(err, direct)
     throw err
   }
+}
+
+/**
+ * The bundle's sha256 the way the platform computes it for the deployment:
+ * the server module's bytes, then each public file's bytes in upload order,
+ * as one stream. Paths are not part of it.
+ */
+export function bundleHashOf(
+  workerBytes: Uint8Array,
+  assets: ReadonlyArray<{ content: string }>,
+): string {
+  const hash = createHash('sha256')
+  hash.update(workerBytes)
+  for (const asset of assets) hash.update(Buffer.from(asset.content, 'base64'))
+  return hash.digest('hex')
 }
 
 export const KEY_EXPIRY_WARNING_DAYS = 14
@@ -442,8 +467,9 @@ async function trySourcePush(args: {
   /** Undefined on a platform older than the sync rule: push on the remote head as before. */
   parent: string | null | undefined
   log: (message: string) => void
+  bundleHash: string
 }): Promise<DeploymentSource | null> {
-  const { options, apiRoot, apiKey, files, parent, log } = args
+  const { options, apiRoot, apiKey, files, parent, log, bundleHash } = args
   const fetchImpl = options.fetchImpl ?? fetch
   try {
     const findings = scanForSecrets(options.cwd, files)
@@ -485,6 +511,7 @@ async function trySourcePush(args: {
         // An older platform knows no base: its grant's head, else the remote head.
         parent: parent === undefined ? (grant.headBefore ?? undefined) : parent,
         message: options.message,
+        bundleHash,
       })
     } finally {
       // Revokes the token at once instead of leaving it to expire.
