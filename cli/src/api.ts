@@ -101,6 +101,39 @@ export interface SourceGrant {
 
 export type SourceReadGrant = Omit<SourceGrant, 'grantId' | 'headBefore' | 'sourceUsage'>
 
+/**
+ * Who moved the environment's head. For an approved change committed by the
+ * platform, `kind` is `proposal`, `proposedBy` says who wrote it and `name`
+ * who approved it; `version` is null until its build deployed it.
+ */
+export interface MovedBy {
+  name: string | null
+  version: number | null
+  at: string
+  forced: boolean
+  kind?: 'proposal'
+  proposalId?: string
+  proposedBy?: 'marco' | 'mcp' | 'system'
+}
+
+const PROPOSERS: Record<NonNullable<MovedBy['proposedBy']>, string> = {
+  marco: "Marco's change",
+  mcp: "An AI agent's change",
+  system: 'A platform change',
+}
+
+/** "Ayşe deployed version 15", or "Marco's change, approved by Ayşe (version 15)". */
+export function describeMovedBy(movedBy: MovedBy): string {
+  const version = movedBy.version === null ? '' : ` (version ${movedBy.version})`
+  if (movedBy.kind === 'proposal') {
+    const change = (movedBy.proposedBy && PROPOSERS[movedBy.proposedBy]) || 'An approved change'
+    return `${change}, approved by ${movedBy.name ?? 'someone'}${version}`
+  }
+  return movedBy.version === null
+    ? `${movedBy.name ?? 'Someone'} deployed`
+    : `${movedBy.name ?? 'Someone'} deployed version ${movedBy.version}`
+}
+
 export interface SourceHead {
   /** False when the platform does not store source for this environment. */
   enabled: boolean
@@ -111,7 +144,7 @@ export interface SourceHead {
   stale: boolean
   /** The head's scan status; null while the platform does not scan yet. */
   scan: 'pending' | 'clean' | 'blocked' | null
-  movedBy: { name: string | null; version: number; at: string; forced: boolean } | null
+  movedBy: MovedBy | null
   /** Old commit -> new commit, after the platform rewrote history. */
   rewrites: Record<string, string>
   /** Absent on platforms older than the source quota; null until first measured. */

@@ -1,5 +1,12 @@
 import { execSync } from 'node:child_process'
-import { CliError, EXIT, fetchSourceHead, fetchSourceReadGrant, type SourceHead } from './api.js'
+import {
+  CliError,
+  EXIT,
+  describeMovedBy,
+  fetchSourceHead,
+  fetchSourceReadGrant,
+  type SourceHead,
+} from './api.js'
 import { readConfig, resolveApiRoot } from './config.js'
 import { resolveDeployKey } from './credentials.js'
 import { readBase, writeBase } from './lock.js'
@@ -162,9 +169,7 @@ export async function runPull(options: PullOptions): Promise<PullResult> {
 
   const files = planFiles(plan)
   const conflicted = files.filter((f) => f.action === 'conflict')
-  const by = head.movedBy
-    ? ` (${head.movedBy.name ?? 'someone'}, version ${head.movedBy.version})`
-    : ''
+  const by = head.movedBy ? ` (${describeMovedBy(head.movedBy)})` : ''
   if (files.every((f) => f.action === 'unchanged')) {
     log(`Your files already contain these changes${by}. Base moved to ${short(head.head)}.`)
   } else {

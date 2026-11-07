@@ -8,6 +8,7 @@ import {
   EXIT,
   closeSourceGrant,
   createDeployment,
+  describeMovedBy,
   fetchDeployment,
   fetchKeyInfo,
   fetchSourceGrant,
@@ -418,7 +419,7 @@ function resolveBase(cwd: string, head: SourceHead, force: boolean): string | nu
 
 export function remoteChangesMessage(head: SourceHead): string {
   const who = head.movedBy
-    ? `${head.movedBy.name ?? 'Someone'} deployed version ${head.movedBy.version}`
+    ? `${describeMovedBy(head.movedBy)}${head.movedBy.kind === 'proposal' ? ' landed' : ''}`
     : 'The environment has new commits'
   return `${who} after your last sync. Run \`marcapony app pull\`, or \`marcapony app deploy --force\` to replace them.`
 }

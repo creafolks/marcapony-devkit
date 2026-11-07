@@ -1,4 +1,4 @@
-import { CliError, EXIT, fetchSourceHead, type SourceHead } from './api.js'
+import { CliError, EXIT, describeMovedBy, fetchSourceHead, type SourceHead } from './api.js'
 import { readConfig, resolveApiRoot } from './config.js'
 import { resolveDeployKey } from './credentials.js'
 import { readBase } from './lock.js'
@@ -72,9 +72,7 @@ export async function runStatus(options: {
     `Platform     ${head.head ? head.head.slice(0, 7) : 'no source yet'}${head.stale ? ' (could not refresh)' : ''}`,
   )
   if (head.movedBy) {
-    log(
-      `             version ${head.movedBy.version} by ${head.movedBy.name ?? 'someone'}${head.movedBy.forced ? ', forced' : ''}`,
-    )
+    log(`             ${describeMovedBy(head.movedBy)}${head.movedBy.forced ? ', forced' : ''}`)
   }
   log(`This project ${entry ? (base ? base.slice(0, 7) : 'no base') : 'never synced'}`)
   if (head.scan) log(`Check        ${head.scan}`)
