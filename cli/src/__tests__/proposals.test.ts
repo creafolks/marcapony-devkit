@@ -240,7 +240,7 @@ describe('marcapony app proposals pull', () => {
 
 describe('readConflictRegions', () => {
   const labels = { ours: 'yours', base: 'base x', theirs: 'change y' }
-  const whole = { base: 'B', ours: 'O', theirs: 'T' }
+  const whole = { base: 'B\n', ours: 'O\n', theirs: 'T\n' }
 
   it('reads two regions back from the markers', () => {
     const merged = [
@@ -265,6 +265,39 @@ describe('readConflictRegions', () => {
       { id: 0, base: 'b1\n', ours: 'o1\n', theirs: 't1\n' },
       { id: 1, base: 'b2\n', ours: '', theirs: 't2\n' },
     ])
+  })
+
+  it('falls back to the whole file when a version holds a marker-like line', () => {
+    const merged = [
+      '<<<<<<< yours',
+      'Title',
+      '||||||| base x',
+      'Heading',
+      '=======',
+      '=======',
+      'Other',
+      '>>>>>>> change y',
+      '',
+    ].join('\n')
+    const sides = { base: 'Heading\n=======\n', ours: 'Title\n', theirs: 'Other\n' }
+    expect(readConflictRegions(merged, labels, 1, sides)).toEqual([{ id: 0, ...sides }])
+  })
+
+  it('keeps a missing last newline on a region that ends the file', () => {
+    const merged = [
+      'a',
+      '<<<<<<< yours',
+      'o',
+      '||||||| base x',
+      'b',
+      '=======',
+      't',
+      '>>>>>>> change y',
+      '',
+    ].join('\n')
+    expect(
+      readConflictRegions(merged, labels, 1, { base: 'a\nb\n', ours: 'a\no', theirs: 'a\nt\n' }),
+    ).toEqual([{ id: 0, base: 'b\n', ours: 'o', theirs: 't\n' }])
   })
 
   it('falls back to the whole file when the markers do not add up', () => {

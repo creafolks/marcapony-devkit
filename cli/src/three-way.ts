@@ -126,9 +126,11 @@ function joinRegionLines(lines: string[]): string {
 
 /**
  * The regions of a merged file, read back from its diff3 markers. When the
- * markers cannot be read back exactly (a file that already holds a line like
- * a marker), the whole file is one region, which is always correct, only
- * coarser.
+ * markers cannot be read back exactly, the whole file is one region, which is
+ * always correct, only coarser. That is the case when any of the three
+ * versions holds a line that reads like a marker (a Markdown heading
+ * underline `=======`, for example): such a line would end a section early
+ * and still give the expected number of regions.
  */
 export function readConflictRegions(
   merged: string,
@@ -143,6 +145,18 @@ export function readConflictRegions(
   if (merged.endsWith('\n')) lines.pop()
   const regions: ConflictRegion[] = []
   const wholeFile = (): ConflictRegion[] => [{ id: 0, ...whole }]
+  const markers = new Set([open, baseLine, '=======', close])
+  const holdsMarker = (side: string | null) =>
+    side?.split('\n').some((line) => markers.has(line)) === true
+  if (holdsMarker(whole.base) || holdsMarker(whole.ours) || holdsMarker(whole.theirs)) {
+    return wholeFile()
+  }
+  // A region that ends the file keeps each side's own last newline: the
+  // merge puts the closing marker on a line of its own either way.
+  const ending = (side: string | null, atEnd: boolean, text: string) =>
+    atEnd && text.endsWith('\n') && side !== null && side !== '' && !side.endsWith('\n')
+      ? text.slice(0, -1)
+      : text
   let i = 0
   while (i < lines.length) {
     if (lines[i] !== open) {
@@ -159,11 +173,12 @@ export function readConflictRegions(
     j++
     while (j < lines.length && lines[j] !== close) theirs.push(lines[j++]!)
     if (j >= lines.length) return wholeFile()
+    const atEnd = j === lines.length - 1
     regions.push({
       id: regions.length,
-      base: joinRegionLines(base),
-      ours: joinRegionLines(ours),
-      theirs: joinRegionLines(theirs),
+      base: ending(whole.base, atEnd, joinRegionLines(base)),
+      ours: ending(whole.ours, atEnd, joinRegionLines(ours)),
+      theirs: ending(whole.theirs, atEnd, joinRegionLines(theirs)),
     })
     i = j + 1
   }
