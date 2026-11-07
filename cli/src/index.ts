@@ -40,7 +40,7 @@ const USAGE = `marcapony — build and deploy Marcapony apps
 
 Usage
   marcapony app link [--code <code>] [--ci] [--cwd <dir>]
-  marcapony app clone [dir] --code <code>
+  marcapony app clone <dir> --code <code>
   marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--json]
   marcapony app status [--cwd <dir>] [--json]
   marcapony app pull [--cwd <dir>] [--patch] [--check] [--yes] [--json]
@@ -60,9 +60,9 @@ Commands
                for the environment. With --ci the key is labelled for a
                pipeline: store it in the pipeline's secret store as
                MARCAPONY_API_KEY, and earlier keys stay valid.
-  app clone    Clone an environment's saved source into a new directory
-               (the app's name by default) and link it with a pairing code,
-               ready to edit and deploy. The read token is passed to git
+  app clone    Clone an environment's saved source into a new or empty
+               directory and link it with a pairing code, ready to edit and
+               deploy. The read token is passed to git
                only; it is never printed or stored.
   app deploy   Run the project's build, upload the bundle, and wait until it is
                live. The target environment comes from the key — there is no

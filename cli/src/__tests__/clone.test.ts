@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import git from 'isomorphic-git'
@@ -142,6 +150,7 @@ describe('marcapony app clone', () => {
     const { fetch } = router(routes('mpk_newkey'))
     const result = await runClone({
       cwd: dir,
+      dir: 'shop',
       code: 'mpl_code',
       cliEnv: 'local',
       fetchImpl: fetch,
@@ -194,12 +203,92 @@ describe('marcapony app clone', () => {
     const { fetch } = router({ ...routes('mpk_k'), '/source-read-token': () => json({}, 404) })
     const err = await runClone({
       cwd: dir,
+      dir: 'shop',
       code: 'mpl_code',
       cliEnv: 'local',
       fetchImpl: fetch,
       log: () => {},
     }).catch((e: unknown) => e)
     expect((err as CliError).exitCode).toBe(EXIT.refused)
+    expect((err as CliError).message).toContain('revoke it from the app page')
     expect(existsSync(join(dir, 'shop'))).toBe(false)
+  })
+
+  it('needs a directory, checked before the pairing code is used', async () => {
+    const { fetch, calls } = router(routes('mpk_k'))
+    const err = await runClone({ cwd: dir, code: 'mpl_code', fetchImpl: fetch }).catch(
+      (e: unknown) => e,
+    )
+    expect((err as Error).message).toContain('Usage')
+    expect(calls).toEqual([])
+  })
+
+  it('does not clone a head the platform blocked', async () => {
+    const { fetch } = router({
+      ...routes('mpk_k'),
+      '/source-head': () => json({ data: headOf({ head: sha('a'), scan: 'blocked' }) }),
+    })
+    let cloned = false
+    const err = await runClone({
+      cwd: dir,
+      dir: 'shop',
+      code: 'mpl_code',
+      cliEnv: 'local',
+      fetchImpl: fetch,
+      log: () => {},
+      clone: (async () => {
+        cloned = true
+      }) as unknown as typeof git.clone,
+    }).catch((e: unknown) => e)
+    expect((err as CliError).code).toBe('source_blocked')
+    expect(cloned).toBe(false)
+    expect(existsSync(join(dir, 'shop'))).toBe(false)
+  })
+
+  it('empties a directory that existed when the clone fails', async () => {
+    mkdirSync(join(dir, 'empty'))
+    const { fetch } = router(routes('mpk_k'))
+    const err = await runClone({
+      cwd: dir,
+      dir: 'empty',
+      code: 'mpl_code',
+      cliEnv: 'local',
+      fetchImpl: fetch,
+      log: () => {},
+      clone: (async (args: Parameters<typeof git.clone>[0]) => {
+        writeFileSync(join(args.dir, 'partial.txt'), 'x')
+        throw new Error('network down')
+      }) as typeof git.clone,
+    }).catch((e: unknown) => e)
+    expect((err as Error).message).toContain('Clone failed: network down')
+    expect(existsSync(join(dir, 'empty'))).toBe(true)
+    expect(readdirSync(join(dir, 'empty'))).toEqual([])
+  })
+
+  it('warns when the branch moved during the clone, and keeps the cloned commit as base', async () => {
+    const lines: string[] = []
+    const { fetch } = router(routes('mpk_k'))
+    const result = await runClone({
+      cwd: dir,
+      dir: 'shop',
+      code: 'mpl_code',
+      cliEnv: 'local',
+      fetchImpl: fetch,
+      log: (m) => lines.push(m),
+      clone: (async (args: Parameters<typeof git.clone>[0]) => {
+        await git.init({ fs, dir: args.dir, defaultBranch: 'test' })
+        writeFileSync(join(args.dir, 'a.txt'), 'a')
+        await git.add({ fs, dir: args.dir, filepath: 'a.txt' })
+        await git.commit({
+          fs,
+          dir: args.dir,
+          message: 'newer',
+          author: { name: 'x', email: 'x@example.com' },
+        })
+      }) as typeof git.clone,
+    })
+    expect(result.head).not.toBe(sha('a'))
+    expect(readBase(join(dir, 'shop'), ENV_ID)?.base).toBe(result.head)
+    expect(lines.some((l) => l.includes('moved during the clone'))).toBe(true)
   })
 })

@@ -163,13 +163,13 @@ a change its author has not seen:
 
 ### Starting from the saved source
 
-`marcapony app clone [dir] --code <code>` clones an environment's saved source
-into a new directory (the app's name by default) and links it, with a pairing
-code from the app page. The clone is ready to edit and deploy, and its commit is
-the base in `marcapony.lock`. The read token is handed to git only; it is never
-printed or written to a file. A plain `git clone` from the dashboard's clone
-dialog works too: after `marcapony app link` in it, its checked-out commit is
-taken as the base.
+`marcapony app clone <dir> --code <code>` clones an environment's saved source
+into a new or empty directory and links it, with a pairing code from the app
+page. The clone is ready to edit and deploy, and its commit is the base in
+`marcapony.lock`. The read token is handed to git only; it is never printed or
+written to a file. A version the platform's scan blocked is not cloned. A
+project that is already a git clone of the environment's branch takes its
+checked-out commit as the base after `marcapony app link`.
 
 If your team keeps its code in its own git repository, that stays the source of
 truth: when your files already contain a teammate's change, `pull` only moves
