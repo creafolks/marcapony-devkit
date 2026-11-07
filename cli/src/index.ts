@@ -63,7 +63,7 @@ Usage
   marcapony app env delete <NAME>
   marcapony app source --dry-run [--json]
   marcapony app migrate-config
-  marcapony app release [--from <env>] [--title <text>] [--notes <text>] [--overwrite] [--yes] [--json]
+  marcapony app release [--from <env>] [--title <text>] [--notes <text>] [--overwrite] [--acknowledge-warnings] [--yes] [--json]
   marcapony app release list [--json]
   marcapony app release retry <number> [--json]
   marcapony app rollback <number> [--yes] [--json]
@@ -155,6 +155,9 @@ Options
                     only one with a live version)
   --title, --notes  The release's title and notes (release)
   --overwrite       Release even though production has changes it would replace
+  --acknowledge-warnings
+                    Release a version with warnings without a prompt (--yes alone
+                    does not)
   --ci              Make a key for a CI pipeline (link only)
   --cwd <dir>       Project directory (defaults to the current directory)
   --message <text>  Version message saved with the source (deploy only)
@@ -205,6 +208,7 @@ const BOOLEAN_FLAGS = new Set([
   'no-browser',
   'refresh',
   'overwrite',
+  'acknowledge-warnings',
 ])
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -319,6 +323,7 @@ export async function main(argv: string[]): Promise<number> {
                   title: stringFlag(flags, 'title'),
                   notes: stringFlag(flags, 'notes'),
                   overwrite: flags.overwrite === true,
+                  acknowledgeWarnings: flags['acknowledge-warnings'] === true,
                   yes: flags.yes === true,
                   confirm: interactive ? askYesNo : undefined,
                 })

@@ -570,7 +570,7 @@ describe('marcapony app release', () => {
           ),
       ],
     ])
-    const result = await runRelease({
+    const base = {
       cwd: dir,
       cliEnv: 'staging',
       yes: true,
@@ -578,7 +578,13 @@ describe('marcapony app release', () => {
       sleep: async () => undefined,
       log: () => undefined,
       credentialDeps: { index, store: async () => store },
-    })
+    }
+    // --yes alone never waves a warning through.
+    const refused = (await runRelease(base).catch((e) => e)) as CliError
+    expect(refused.exitCode).toBe(EXIT.refused)
+    expect(refused.message).toContain('--acknowledge-warnings')
+    expect(calls.some((c) => c.init.method === 'POST')).toBe(false)
+    const result = await runRelease({ ...base, acknowledgeWarnings: true })
     expect(result.release.status).toBe('live')
     const create = calls.find((c) => c.init.method === 'POST')!
     expect(JSON.parse(String(create.init.body))).toEqual({

@@ -117,6 +117,8 @@ export interface PromoteOptions extends ReleaseOptions {
   notes?: string
   yes?: boolean
   overwrite?: boolean
+  /** Confirms the preview's warnings without a prompt (`--acknowledge-warnings`). */
+  acknowledgeWarnings?: boolean
   confirm?: (question: string) => Promise<boolean>
 }
 
@@ -198,12 +200,23 @@ export async function runRelease(
     )
   }
 
-  if (!options.yes) {
+  // --yes answers "take it live", never the warnings: those need their own
+  // flag without a prompt, so a script cannot wave them through by accident.
+  if (warnings.length > 0 && !options.acknowledgeWarnings) {
+    if (options.yes || !options.confirm) {
+      throw new CliError(
+        'This version has warnings. Release it from a terminal to confirm them, or pass --acknowledge-warnings.',
+        { code: 'release_needs_confirmation', exitCode: EXIT.refused },
+      )
+    }
+    if (!(await options.confirm('Take it live anyway?'))) {
+      throw new CliError('Release cancelled.', { exitCode: EXIT.failed })
+    }
+  } else if (!options.yes) {
     if (!options.confirm) {
       throw new CliError('Run with --yes to release without a prompt.', { exitCode: EXIT.failed })
     }
-    const question = warnings.length > 0 ? 'Take it live anyway?' : 'Take it live?'
-    if (!(await options.confirm(question))) {
+    if (!(await options.confirm('Take it live?'))) {
       throw new CliError('Release cancelled.', { exitCode: EXIT.failed })
     }
   }
