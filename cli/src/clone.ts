@@ -64,8 +64,7 @@ export async function runClone(options: CloneOptions): Promise<CloneResult> {
     link.expiresAt ? ` (it expires on ${link.expiresAt.slice(0, 10)})` : ''
   }; revoke it from the app page.`
   const head = await fetchSourceHead(apiRoot, link.key, fetchImpl)
-  const grant = await fetchSourceReadGrant(apiRoot, link.key, fetchImpl)
-  if (!head?.enabled || !head.environmentId || !head.head || !grant) {
+  if (!head?.enabled || !head.environmentId || !head.head) {
     throw new CliError(
       `${link.environmentName} has no saved source yet. Deploy it once with the CLI, then clone.${unusedKey}`,
       { exitCode: EXIT.refused },
@@ -79,6 +78,26 @@ export async function runClone(options: CloneOptions): Promise<CloneResult> {
   }
   if (head.scan === 'pending') {
     log(`Warning: the latest version of ${link.environmentName} is still being scanned.`)
+  }
+  // Minted only once the clone will go ahead: each token is recorded and rate-limited.
+  let grant: Awaited<ReturnType<typeof fetchSourceReadGrant>>
+  try {
+    grant = await fetchSourceReadGrant(apiRoot, link.key, fetchImpl)
+  } catch (err) {
+    if (err instanceof CliError) {
+      throw new CliError(`${err.message}.${unusedKey}`, {
+        code: err.code,
+        status: err.status,
+        exitCode: err.exitCode,
+      })
+    }
+    throw err
+  }
+  if (!grant) {
+    throw new CliError(
+      `${link.environmentName} has no saved source yet. Deploy it once with the CLI, then clone.${unusedKey}`,
+      { exitCode: EXIT.refused },
+    )
   }
 
   const created = !existsSync(dir)

@@ -224,7 +224,7 @@ describe('marcapony app clone', () => {
   })
 
   it('does not clone a head the platform blocked', async () => {
-    const { fetch } = router({
+    const { fetch, calls } = router({
       ...routes('mpk_k'),
       '/source-head': () => json({ data: headOf({ head: sha('a'), scan: 'blocked' }) }),
     })
@@ -242,6 +242,27 @@ describe('marcapony app clone', () => {
     }).catch((e: unknown) => e)
     expect((err as CliError).code).toBe('source_blocked')
     expect(cloned).toBe(false)
+    // No read token is minted for a clone that is refused.
+    expect(calls.some((url) => url.endsWith('/source-read-token'))).toBe(false)
+    expect(existsSync(join(dir, 'shop'))).toBe(false)
+  })
+
+  it('names the unsaved key when the read token is refused', async () => {
+    const { fetch } = router({
+      ...routes('mpk_k'),
+      '/source-read-token': () =>
+        json({ error: { code: 'rate_limited', message: 'Too many read tokens' } }, 429),
+    })
+    const err = await runClone({
+      cwd: dir,
+      dir: 'shop',
+      code: 'mpl_code',
+      cliEnv: 'local',
+      fetchImpl: fetch,
+      log: () => {},
+    }).catch((e: unknown) => e)
+    expect((err as CliError).code).toBe('rate_limited')
+    expect((err as CliError).message).toContain('revoke it from the app page')
     expect(existsSync(join(dir, 'shop'))).toBe(false)
   })
 
