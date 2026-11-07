@@ -300,6 +300,38 @@ describe('which key a command deploys with', () => {
     expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ appId: APP_ID, environment: 'test' })
   })
 
+  it("the folder's dev key loaded into the environment (bun, wrangler dev) does not beat the login", async () => {
+    const { index, store } = loggedIn()
+    writeProjectLink(dir, {
+      apiRoot: API,
+      accountId: 'acc-1',
+      accountSlug: 'abc',
+      appId: APP_ID,
+      appSlug: 'kaynak',
+      environment: 'test',
+    })
+    writeFileSync(join(dir, '.env.local'), 'MARCAPONY_API_KEY=mpk_devkey\n')
+    const { fetch } = routeFetch([['/ext/v1/cli/sessions', session]])
+    const deps = { index, store: async () => store, fetchImpl: fetch }
+    expect(
+      await resolveDeployKey({
+        cwd: dir,
+        env: { MARCAPONY_API_KEY: 'mpk_devkey' },
+        apiRoot: API,
+        ...deps,
+      }),
+    ).toBe('mpk_session')
+    clearSessionCache()
+    expect(
+      await resolveDeployKey({
+        cwd: dir,
+        env: { MARCAPONY_API_KEY: 'mpk_ci' },
+        apiRoot: API,
+        ...deps,
+      }),
+    ).toBe('mpk_ci')
+  })
+
   it('exits 7 when the project needs a login that is gone', async () => {
     writeProjectLink(dir, {
       apiRoot: API,

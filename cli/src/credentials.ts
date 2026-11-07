@@ -87,9 +87,15 @@ const sessionCache = new Map<string, string>()
 export async function resolveDeployKey(
   options: { cwd: string; env: NodeJS.ProcessEnv; apiRoot: string } & CredentialDeps,
 ): Promise<string | null> {
-  if (options.env.MARCAPONY_API_KEY) return options.env.MARCAPONY_API_KEY
   const project = readProjectLink(options.cwd)
-  if (project && project.apiRoot === options.apiRoot) {
+  const linkedWithLogin = project !== null && project.apiRoot === options.apiRoot
+  const envKey = options.env.MARCAPONY_API_KEY
+  // Bun and `wrangler dev` load `.env.local` into the environment, so in a
+  // login-linked project MARCAPONY_API_KEY is usually the folder's data-only
+  // dev key, which cannot deploy. Only a key that is not the folder's own
+  // (a CI secret, an agent's key) wins over the login.
+  if (envKey && !(linkedWithLogin && envKey === resolveApiKey(options.cwd, {}))) return envKey
+  if (project && linkedWithLogin) {
     const cacheKey = `${project.apiRoot}|${project.appId}|${project.environment}`
     const cached = sessionCache.get(cacheKey)
     if (cached) return cached
@@ -122,9 +128,15 @@ export function describeProjectCredential(
   env: NodeJS.ProcessEnv,
   apiRoot: string,
 ): string {
-  if (env.MARCAPONY_API_KEY) return 'MARCAPONY_API_KEY from the environment'
   const project = readProjectLink(cwd)
-  if (project && project.apiRoot === apiRoot) {
+  const linkedWithLogin = project !== null && project.apiRoot === apiRoot
+  if (
+    env.MARCAPONY_API_KEY &&
+    !(linkedWithLogin && env.MARCAPONY_API_KEY === resolveApiKey(cwd, {}))
+  ) {
+    return 'MARCAPONY_API_KEY from the environment'
+  }
+  if (project && linkedWithLogin) {
     return `your login to ${project.accountSlug ?? project.accountId} (${project.appSlug}, ${project.environment})`
   }
   if (resolveApiKey(cwd, env))
