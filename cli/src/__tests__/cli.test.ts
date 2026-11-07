@@ -839,10 +839,10 @@ describe('source push', () => {
   })
 
   it('login never moves a project linked elsewhere, and saves nothing outside a project', () => {
-    saveLoginCliEnv(dir, 'staging')
-    expect(readSavedCliEnv(dir)).toBe(
-      existsSync(join(dir, 'marcapony.json')) ? 'staging' : undefined,
-    )
+    const outside = mkdtempSync(join(tmpdir(), 'mp-outside-'))
+    saveLoginCliEnv(outside, 'staging')
+    expect(readSavedCliEnv(outside)).toBeUndefined()
+    rmSync(outside, { recursive: true, force: true })
     saveCliEnv(dir, 'local')
     saveLoginCliEnv(dir, 'staging')
     expect(readSavedCliEnv(dir)).toBe('local')
