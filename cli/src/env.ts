@@ -1,6 +1,7 @@
 import { CliError, EXIT } from './api.js'
 import { readConfig, resolveApiRoot } from './config.js'
 import { resolveDeployKey } from './credentials.js'
+import { cliFetch } from './client-info.js'
 
 /**
  * `marcapony app env set | list | delete`: the environment's own settings and
@@ -35,7 +36,7 @@ async function context(options: EnvOptions): Promise<{
   fetchImpl: typeof fetch
 }> {
   const apiRoot = resolveApiRoot(options.cliEnv)
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
   const apiKey = readConfig(options.cwd)
     ? await resolveDeployKey({ cwd: options.cwd, env: options.env, apiRoot, fetchImpl })
     : null

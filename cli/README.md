@@ -294,6 +294,22 @@ Exit codes:
 | 6    | `marcapony scan` found possible secrets                |
 | 7    | Not logged in, or the login expired or was revoked     |
 
+## Staying up to date
+
+When a newer CLI or SDK is out, `app deploy` says so in its warnings, and the
+`--json` output carries the same as `notices`, each with `kind`
+(`cli_update` or `sdk_update`), `current`, `latest` and the `command` that
+updates it. Notices never stop a deploy.
+
+Once a day at most, the CLI also asks npm for its latest version and prints
+one line on stderr when you are behind. It never does with `--json` or in CI;
+set `MARCAPONY_NO_UPDATE_CHECK=1` to turn it off. Update with
+`bun add -g marcapony@latest`, or `bun add -d marcapony@latest` in a project.
+
+Every request names the CLI version (`User-Agent` and `X-Marcapony-Cli`), and a
+deploy also names the project's `marcapony-sdk` version, so the dashboard can
+show what built each version.
+
 ## Configuration reference
 
 `marcapony.json` says what the app needs; Marcapony turns it into the runtime

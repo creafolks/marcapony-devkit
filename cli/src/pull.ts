@@ -22,6 +22,7 @@ import {
   sameBytes,
   writePlan,
 } from './three-way.js'
+import { cliFetch } from './client-info.js'
 
 export interface PullOptions {
   cwd: string
@@ -77,7 +78,7 @@ function short(sha: string | null): string {
  */
 export async function runPull(options: PullOptions): Promise<PullResult> {
   const log = options.log ?? console.log
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   const config = readConfig(options.cwd)
   const apiKey = config

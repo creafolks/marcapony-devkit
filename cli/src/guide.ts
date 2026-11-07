@@ -1,6 +1,7 @@
 import { fetchCapabilities } from './api.js'
 import { renderAgents } from './agents.js'
 import { envFileOf, readConfig, resolveApiKey, resolveApiRoot } from './config.js'
+import { cliFetch } from './client-info.js'
 
 export interface GuideOptions {
   cwd: string
@@ -25,7 +26,7 @@ export async function runGuide(options: GuideOptions): Promise<void> {
   const appName = config?.app ?? 'your app'
 
   const capabilities = apiKey
-    ? await fetchCapabilities(apiRoot, apiKey, options.fetchImpl ?? fetch)
+    ? await fetchCapabilities(apiRoot, apiKey, options.fetchImpl ?? cliFetch)
     : []
 
   log(renderAgents({ appName, capabilities, envFile: envFileOf(options.cwd, config) }))

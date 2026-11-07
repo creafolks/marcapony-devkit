@@ -15,6 +15,7 @@ import {
   type SecretStore,
 } from './login-store.js'
 import { readProjectLink } from './project-link.js'
+import { cliFetch } from './client-info.js'
 
 export interface LoginOptions {
   cliEnv?: string
@@ -61,7 +62,7 @@ function openInBrowser(url: string): void {
  */
 export async function runLogin(options: LoginOptions): Promise<LoginResult> {
   const log = options.log ?? console.log
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? cliFetch
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   const apiRoot = resolveApiRoot(options.cliEnv)
 
