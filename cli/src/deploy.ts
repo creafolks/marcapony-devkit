@@ -434,14 +434,18 @@ function resolveBase(cwd: string, head: SourceHead, force: boolean): string | nu
   })
 }
 
-/** "A forced git push landed", "Ayşe force-pushed": only a phrase without a verb needs one. */
-function landed(movedBy: NonNullable<SourceHead['movedBy']>): boolean {
-  return movedBy.kind === 'proposal' || (movedBy.kind === 'push' && !movedBy.name)
+/**
+ * "A forced git push landed", "Ayşe force-pushed": only a phrase without a
+ * verb needs one, after a comma when the phrase ends in ", version 7".
+ */
+function landed(movedBy: NonNullable<SourceHead['movedBy']>): string {
+  if (movedBy.kind === 'proposal') return movedBy.version === null ? ' landed' : ', landed'
+  return movedBy.kind === 'push' && !movedBy.name ? ' landed' : ''
 }
 
 export function remoteChangesMessage(head: SourceHead): string {
   const who = head.movedBy
-    ? `${describeMovedBy(head.movedBy)}${landed(head.movedBy) ? ' landed' : ''}`
+    ? `${describeMovedBy(head.movedBy)}${landed(head.movedBy)}`
     : 'The environment has new commits'
   return `${who} after your last sync. Run \`marcapony app pull\`, or \`marcapony app deploy --force\` to replace them.`
 }

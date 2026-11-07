@@ -209,7 +209,7 @@ describe('runDeployDetailed with the sync rule', () => {
     }).catch((e: unknown) => e)
     expect((err as CliError).exitCode).toBe(EXIT.remoteChanges)
     expect((err as CliError).message).toContain(
-      "Marco's change, approved by Ayşe (version 7) landed after your last sync",
+      "Marco's change, approved by Ayşe, version 7, landed after your last sync",
     )
   })
 
@@ -455,6 +455,41 @@ describe('runPull', () => {
     expect(readFileSync(join(dir, 'src', 'app.ts'), 'utf8')).toBe('export const a = 2\n')
     expect(readFileSync(join(dir, 'src', 'new.ts'), 'utf8')).toBe('n\n')
     expect(readBase(dir, ENV_ID)?.base).toBe(sha('a'))
+  })
+
+  it('names an approved change that has a version without nested parentheses', async () => {
+    writeBase(dir, ENV_ID, sha('0'))
+    writeFileSync(join(dir, 'src', 'app.ts'), 'export const a = 1\n')
+    const { fetch } = pullRoutes(
+      headOf({
+        head: sha('a'),
+        movedBy: {
+          kind: 'proposal',
+          proposalId: 'p-1',
+          proposedBy: 'marco',
+          name: 'Ayşe',
+          version: 15,
+          at: 'x',
+          forced: false,
+        },
+      }),
+    )
+    const logged: string[] = []
+    await runPull({
+      cwd: dir,
+      cliEnv: 'local',
+      env: {},
+      fetchImpl: fetch,
+      log: (line: string) => logged.push(line),
+      useGit: false,
+      readRemote: remote(
+        { 'src/app.ts': 'export const a = 1\n' },
+        { 'src/app.ts': 'export const a = 2\n' },
+      ),
+    })
+    expect(logged[0]).toBe(
+      `Pulled ${sha('a').slice(0, 7)} (Marco's change, approved by Ayşe, version 15):`,
+    )
   })
 
   it('names a forced git push without nested parentheses', async () => {
@@ -704,7 +739,7 @@ describe('describeMovedBy', () => {
     ).toBe("An AI agent's change, approved by someone")
     expect(
       describeMovedBy({ kind: 'proposal', name: 'Ayşe', version: 3, at: 'x', forced: false }),
-    ).toBe('An approved change, approved by Ayşe (version 3)')
+    ).toBe('An approved change, approved by Ayşe, version 3')
   })
 
   it('names a git push whose build has not deployed yet', () => {
