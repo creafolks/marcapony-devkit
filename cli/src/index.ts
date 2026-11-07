@@ -7,6 +7,7 @@ import { runDeployDetailed } from './deploy.js'
 import { runLink } from './link.js'
 import { runClone } from './clone.js'
 import { runGuide } from './guide.js'
+import { runProposalPull, runProposalsList } from './proposals.js'
 import { runPull } from './pull.js'
 import { runStatus } from './status.js'
 import { readHidden, readStdin, runEnvDelete, runEnvList, runEnvSet } from './env.js'
@@ -19,6 +20,8 @@ export { runClone } from './clone.js'
 export { runDeploy, runDeployDetailed } from './deploy.js'
 export { runGuide } from './guide.js'
 export { runPull } from './pull.js'
+export { runProposalPull, runProposalsList } from './proposals.js'
+export type { ConflictRegion, FileConflicts } from './three-way.js'
 export { runStatus } from './status.js'
 export { runEnvDelete, runEnvList, runEnvSet } from './env.js'
 export { migrateConfig, runMigrateConfig } from './migrate.js'
@@ -44,6 +47,8 @@ Usage
   marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--json]
   marcapony app status [--cwd <dir>] [--json]
   marcapony app pull [--cwd <dir>] [--patch] [--check] [--yes] [--json]
+  marcapony app proposals list [--json]
+  marcapony app proposals pull <id> [--yes] [--json]
   marcapony app env list [--show] [--json]
   marcapony app env set <NAME> [--secret]     (value from a hidden prompt or stdin)
   marcapony app env delete <NAME>
@@ -75,7 +80,15 @@ Commands
                (marcapony.lock) and the next command to run.
   app pull     Merge the environment's newer changes into your files. Conflicts
                get git's diff3 markers. Updates marcapony.lock; commit that
-               file so teammates, CI and agents share the base.
+               file so teammates, CI and agents share the base. With --json,
+               each conflicted file lists its regions with the base and both
+               sides.
+  app proposals
+               Changes the app's owner approved in the dashboard and handed
+               over to the developers. list shows them; pull <id> merges one
+               into your files the same way as app pull, without moving the
+               base in marcapony.lock. Deploy afterwards: the deploy that
+               contains the change closes it.
   app env      The environment's own settings and secrets, injected into the
                app as env values on every deploy and applied at once to the
                running app. A value is never taken from the command line:
@@ -106,6 +119,7 @@ Options
   --patch           Print the remote changes as a patch instead of applying them
   --check           Run the project's build after a pull
   --yes             Never ask; merge into files with uncommitted changes
+                    (pull and proposals pull)
   --secret          Store the value as a secret (env set only)
   --show            Print setting values (env list only; secrets never)
   --json            Print the result as JSON (for scripts and agents)
@@ -260,6 +274,30 @@ export async function main(argv: string[]): Promise<number> {
       if (result.patch !== undefined && !json) process.stdout.write(result.patch)
       if (json) console.log(JSON.stringify({ ok: result.status !== 'conflicts', ...result }))
       return result.status === 'conflicts' ? EXIT.conflicts : EXIT.ok
+    }
+    if (namespace === 'app' && action === 'proposals') {
+      const [, , sub, id] = command
+      const base = { cwd, cliEnv, env: process.env, log }
+      if (sub === 'list') {
+        const result = await runProposalsList(base)
+        if (json) console.log(JSON.stringify({ ok: true, ...result }))
+        return EXIT.ok
+      }
+      if (sub === 'pull') {
+        const interactive = !json && process.stdin.isTTY === true && process.stdout.isTTY === true
+        const result = await runProposalPull({
+          ...base,
+          id,
+          yes: flags.yes === true,
+          interactive,
+          confirm: interactive ? askYesNo : undefined,
+        })
+        if (json) console.log(JSON.stringify({ ok: result.status !== 'conflicts', ...result }))
+        return result.status === 'conflicts' ? EXIT.conflicts : EXIT.ok
+      }
+      throw new CliError('Usage: marcapony app proposals list | pull <id>', {
+        exitCode: EXIT.failed,
+      })
     }
     if (namespace === 'app' && action === 'source') {
       if (flags['dry-run'] !== true) {
