@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
 import { CliError, EXIT } from './api.js'
 import { runDeployDetailed } from './deploy.js'
+import { isProjectFolder, readSavedCliEnv, saveCliEnv } from './cli-env.js'
 import { runLink } from './link.js'
 import { runClone } from './clone.js'
 import { runGuide } from './guide.js'
@@ -41,7 +42,7 @@ export * from './agents.js'
 
 // Kept in step with cli/package.json by a test — `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.11.0'
+const VERSION = '0.11.1'
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
@@ -156,8 +157,8 @@ Options
   --title, --notes  The release's title and notes (release)
   --overwrite       Release even though production has changes it would replace
   --acknowledge-warnings
-                    Release a version with warnings without a prompt (--yes alone
-                    does not)
+                    Confirm a version's warnings without a prompt; use it together
+                    with --yes (--yes alone stops at warnings)
   --ci              Make a key for a CI pipeline (link only)
   --cwd <dir>       Project directory (defaults to the current directory)
   --message <text>  Version message saved with the source (deploy only)
@@ -256,7 +257,17 @@ export async function main(argv: string[]): Promise<number> {
   // Hidden, undocumented team escape hatch: point the CLI at a non-production
   // API (local | staging | production). Not shown in --help; end users only
   // ever reach production. Arbitrary URLs are intentionally not accepted.
-  const cliEnv = stringFlag(flags, 'cli-env')
+  // `app link` and `login` save an explicit choice in the project, and later
+  // commands there default to it, so a staging-linked project never falls
+  // back to production silently. An explicit flag always wins.
+  const explicitCliEnv = stringFlag(flags, 'cli-env')
+  const savedCliEnv = explicitCliEnv ? undefined : readSavedCliEnv(cwd)
+  const cliEnv = explicitCliEnv ?? savedCliEnv
+  if (savedCliEnv && savedCliEnv !== 'production') {
+    console.error(
+      `Using the ${savedCliEnv} API this project was linked with (--cli-env to change).`,
+    )
+  }
 
   try {
     if (namespace === 'guide') {
@@ -281,6 +292,7 @@ export async function main(argv: string[]): Promise<number> {
         interactive: process.stdout.isTTY === true,
         log: out,
       })
+      if (explicitCliEnv && isProjectFolder(cwd)) saveCliEnv(cwd, explicitCliEnv)
       if (json) console.log(JSON.stringify({ ok: true, ...result }))
       return EXIT.ok
     }
@@ -306,6 +318,7 @@ export async function main(argv: string[]): Promise<number> {
         refresh: flags.refresh === true,
         env: process.env,
       })
+      if (explicitCliEnv) saveCliEnv(cwd, explicitCliEnv)
       return 0
     }
     if (namespace === 'app' && action === 'release') {
