@@ -183,8 +183,14 @@ export async function runRelease(
     })
   }
   if (preview.productionMoved && !options.overwrite) {
-    for (const commit of preview.productionCommits.slice(0, 5)) {
-      ctx.log(`  On production only: ${commit.sha.slice(0, 7)} ${commit.message}`)
+    if (preview.lastReleaseRemoved) {
+      ctx.log(
+        "  The last release's commit was removed by a history cleanup, so production's changes cannot be counted. Releasing replaces production's code with this version.",
+      )
+    } else {
+      for (const commit of preview.productionCommits.slice(0, 5)) {
+        ctx.log(`  On production only: ${commit.sha.slice(0, 7)} ${commit.message}`)
+      }
     }
     throw new CliError(
       'Production has changes this release does not include. Pass --overwrite to replace them.',

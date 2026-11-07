@@ -67,6 +67,8 @@ export interface ReleasePreview {
   commitCount: number | null
   olderThanPreviousRelease: boolean
   productionMoved: boolean
+  /** A history cleanup removed the last release's commit: production's changes cannot be counted. */
+  lastReleaseRemoved?: boolean
   productionCommits: Array<{ sha: string; message: string }>
   missingValues: string[]
   blockers: string[]

@@ -616,6 +616,34 @@ describe('marcapony app release', () => {
     expect(calls.some((c) => c.init.method === 'POST')).toBe(false)
   })
 
+  it('says why production counts as moved after a history cleanup instead of listing commits', async () => {
+    const { index, store } = linkedRelease()
+    const logs: string[] = []
+    const { fetch } = routeFetch([
+      [
+        '/releases/preview',
+        () =>
+          preview({
+            productionMoved: true,
+            lastReleaseRemoved: true,
+            productionCommits: [{ sha: 'a'.repeat(40), message: 'newest on the branch' }],
+          }),
+      ],
+      ['/ext/v1/cli/apps', () => json(APPS)],
+    ])
+    const err = (await runRelease({
+      cwd: dir,
+      cliEnv: 'staging',
+      yes: true,
+      fetchImpl: fetch,
+      log: (m) => logs.push(m),
+      credentialDeps: { index, store: async () => store },
+    }).catch((e) => e)) as CliError
+    expect(err.code).toBe('production_moved')
+    expect(logs.join('\n')).toContain('history cleanup')
+    expect(logs.join('\n')).not.toContain('newest on the branch')
+  })
+
   it('needs a login-linked folder: an app key is never enough', async () => {
     writeFileSync(join(dir, '.env.local'), 'MARCAPONY_API_KEY=mpk_prodkey\n')
     const err = (await runReleaseList({
