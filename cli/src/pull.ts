@@ -1,11 +1,19 @@
-import { execFileSync, execSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { execSync } from 'node:child_process'
 import { CliError, EXIT, fetchSourceHead, fetchSourceReadGrant, type SourceHead } from './api.js'
 import { readConfig, resolveApiKey, resolveApiRoot } from './config.js'
 import { readBase, writeBase } from './lock.js'
-import { hasGitBinary, mergeFile, unifiedDiff } from './merge.js'
+import { unifiedDiff } from './merge.js'
 import { readRemoteFiles } from './source.js'
+import {
+  type FileConflicts,
+  isBinary,
+  type PullFileAction,
+  planConflicts,
+  planFiles,
+  planThreeWay,
+  sameBytes,
+  writePlan,
+} from './three-way.js'
 
 export interface PullOptions {
   cwd: string
@@ -30,7 +38,9 @@ export interface PullOptions {
   useGit?: boolean
 }
 
-export type PullFileAction = 'added' | 'updated' | 'deleted' | 'merged' | 'conflict' | 'unchanged'
+export type { PullFileAction }
+
+const decoder = new TextDecoder()
 
 export interface PullResult {
   status: 'up_to_date' | 'nothing_to_pull' | 'merged' | 'conflicts' | 'patch'
@@ -38,6 +48,8 @@ export interface PullResult {
   base: string | null
   files: Array<{ path: string; action: PullFileAction; conflicts?: number }>
   patch?: string
+  /** With conflicts: each conflicted file's regions, base and both sides in full. */
+  conflicts?: { headCommit: string; files: FileConflicts[] }
 }
 
 const PENDING_WAIT_MS = 60_000
@@ -46,19 +58,6 @@ const PENDING_POLL_MS = 3_000
 function short(sha: string | null): string {
   return sha ? sha.slice(0, 7) : 'none'
 }
-
-function same(a: Uint8Array | undefined, b: Uint8Array | undefined): boolean {
-  if (a === undefined || b === undefined) return a === b
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
-  return true
-}
-
-function isBinary(bytes: Uint8Array | undefined): boolean {
-  return bytes?.includes(0) === true
-}
-
-const decoder = new TextDecoder()
 
 /**
  * `marcapony app pull`: merge the environment's remote changes into the
@@ -131,7 +130,7 @@ export async function runPull(options: PullOptions): Promise<PullResult> {
       .map((p) => {
         const b = baseMap.get(p)
         const t = theirFiles.get(p)
-        if (same(b, t) || isBinary(b) || isBinary(t)) return ''
+        if (sameBytes(b, t) || isBinary(b) || isBinary(t)) return ''
         return unifiedDiff(p, b ? decoder.decode(b) : null, t ? decoder.decode(t) : null)
       })
       .join('')
@@ -143,67 +142,17 @@ export async function runPull(options: PullOptions): Promise<PullResult> {
     base: `base ${short(base)}`,
     theirs: `marcapony ${short(head.head)}`,
   }
-  const plan: Array<{
-    path: string
-    action: PullFileAction
-    content?: Uint8Array | string | null
-    conflicts?: number
-  }> = []
-  for (const path of paths) {
-    const b = baseMap.get(path)
-    const t = theirFiles.get(path)
-    if (same(b, t)) continue
-    const o = readWorkingFile(options.cwd, path)
-    if (same(o, t)) {
-      plan.push({ path, action: 'unchanged' })
-    } else if (same(o, b)) {
-      plan.push({
-        path,
-        action: t === undefined ? 'deleted' : o === undefined ? 'added' : 'updated',
-        content: t ?? null,
-      })
-    } else if (o === undefined || t === undefined || isBinary(o) || isBinary(t) || isBinary(b)) {
-      // Deleted on one side and changed on the other, or binary: nothing to
-      // merge line by line, so the file is left as it is and listed.
-      plan.push({ path, action: 'conflict', conflicts: 1 })
-    } else {
-      const merged = mergeFile(
-        decoder.decode(o),
-        b ? decoder.decode(b) : '',
-        decoder.decode(t),
-        labels,
-        options.useGit,
-      )
-      plan.push({
-        path,
-        action: merged.conflicts > 0 ? 'conflict' : 'merged',
-        content: merged.text,
-        ...(merged.conflicts > 0 ? { conflicts: merged.conflicts } : {}),
-      })
-    }
-  }
-
-  const writes = plan.filter((p) => p.content !== undefined)
-  await guardUncommittedChanges(
-    options,
-    writes.map((w) => w.path),
-  )
-  for (const w of writes) {
-    const target = join(options.cwd, w.path)
-    if (w.content === null) {
-      rmSync(target, { force: true })
-    } else {
-      mkdirSync(dirname(target), { recursive: true })
-      writeFileSync(target, w.content as string | Uint8Array)
-    }
-  }
+  const plan = planThreeWay({
+    cwd: options.cwd,
+    base: baseMap,
+    theirs: theirFiles,
+    labels,
+    useGit: options.useGit,
+  })
+  await writePlan({ ...options, command: 'marcapony app pull' }, plan)
   writeBase(options.cwd, environmentId, head.head)
 
-  const files = plan.map(({ path, action, conflicts }) => ({
-    path,
-    action,
-    ...(conflicts ? { conflicts } : {}),
-  }))
+  const files = planFiles(plan)
   const conflicted = files.filter((f) => f.action === 'conflict')
   const by = head.movedBy
     ? ` (${head.movedBy.name ?? 'someone'}, version ${head.movedBy.version})`
@@ -217,7 +166,13 @@ export async function runPull(options: PullOptions): Promise<PullResult> {
   }
   if (conflicted.length > 0) {
     log(`Resolve the conflicts in ${conflicted.length} file(s), then deploy.`)
-    return { status: 'conflicts', head: head.head, base, files }
+    return {
+      status: 'conflicts',
+      head: head.head,
+      base,
+      files,
+      conflicts: { headCommit: head.head, files: planConflicts(plan) },
+    }
   }
   if (options.check) {
     log(`Checking the build: ${config.build}`)
@@ -245,52 +200,4 @@ function refuseUnsafeHead(head: SourceHead): void {
       exitCode: EXIT.refused,
     })
   }
-}
-
-function readWorkingFile(cwd: string, path: string): Uint8Array | undefined {
-  const full = join(cwd, path)
-  if (!existsSync(full)) return undefined
-  try {
-    return new Uint8Array(readFileSync(full))
-  } catch {
-    return undefined
-  }
-}
-
-/** Files with uncommitted changes in the developer's own git, among `paths`. */
-function dirtyPaths(cwd: string, paths: string[]): string[] {
-  if (paths.length === 0 || !hasGitBinary()) return []
-  try {
-    const out = execFileSync('git', ['status', '--porcelain', '--', ...paths], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-    return out
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => line.slice(3))
-  } catch {
-    return [] // not a git repo
-  }
-}
-
-async function guardUncommittedChanges(options: PullOptions, paths: string[]): Promise<void> {
-  if (options.yes) return
-  const dirty = dirtyPaths(options.cwd, paths)
-  if (dirty.length === 0) return
-  const list = dirty.slice(0, 10).join(', ')
-  if (options.interactive && options.confirm) {
-    if (
-      await options.confirm(
-        `These files have uncommitted changes: ${list}. Merge into them anyway?`,
-      )
-    ) {
-      return
-    }
-  }
-  throw new CliError(
-    `These files have uncommitted changes: ${list}. Commit or stash them, or run \`marcapony app pull --yes\`.`,
-    { exitCode: EXIT.refused },
-  )
 }

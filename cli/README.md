@@ -171,6 +171,23 @@ written to a file. A version the platform's scan blocked is not cloned. A
 project that is already a git clone of the environment's branch takes its
 checked-out commit as the base after `marcapony app link`.
 
+### Changes handed over from the dashboard
+
+An app's owner can set its changes from the dashboard (for example ones the
+AI assistant proposed) to be handed over to the developers instead of being
+saved on the environment. An approved change then waits for you:
+
+```bash
+marcapony app proposals list
+marcapony app proposals pull <id>
+```
+
+`proposals pull` merges the change into your files the same way as
+`marcapony app pull`, with the same conflict markers, exit code 3 and `--yes`,
+but it does not move the base in `marcapony.lock`. Check that it builds, commit
+it to your own git and deploy: the deploy that contains the change closes it in
+the dashboard.
+
 If your team keeps its code in its own git repository, that stays the source of
 truth: when your files already contain a teammate's change, `pull` only moves
 the base. Giving each developer or agent an environment of its own (for
@@ -201,7 +218,15 @@ marcapony app env delete BOOKING_WEBHOOK_URL
 ## Scripts and agents
 
 Every command takes `--json` and prints one JSON object on stdout (progress goes
-to stderr). Commands never wait for input without a terminal. Exit codes:
+to stderr). Commands never wait for input without a terminal.
+
+When `pull` or `proposals pull` leaves conflicts, the JSON lists them under
+`conflicts.files`. Each file has its `regions`, and each region has an `id` and
+the full text of `base`, `ours` (your files) and `theirs` (the incoming
+version). A side is `null` when the file does not exist there. A binary file is
+listed with `"binary": true` and no regions, and is left as it was.
+
+Exit codes:
 
 | Code | Meaning                                                |
 | ---- | ------------------------------------------------------ |
@@ -267,7 +292,7 @@ supplied key already reaches.
 | `--force`          | Deploy over changes you have not pulled (deploy only) |
 | `--patch`          | Print the remote changes as a patch (pull only)       |
 | `--check`          | Run the build after a pull (pull only)                |
-| `--yes`            | Never ask (pull only)                                 |
+| `--yes`            | Never ask (pull and proposals pull)                   |
 | `--json`           | Print the result as JSON                              |
 
 Requires Node 20+ or Bun.

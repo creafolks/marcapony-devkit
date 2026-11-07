@@ -402,3 +402,53 @@ export async function fetchKeyInfo(
   }
   return null
 }
+
+/** A change the owner approved and handed over to the developers, as `marcapony app proposals list` shows it. */
+export interface HandedOverChange {
+  id: string
+  status: string
+  summary: string | null
+  baseCommit: string
+  approvedAt: string | null
+  approvedBy: string | null
+  fileCount?: number
+}
+
+/** One file of a handed-over change: the content on its base and the proposed content (null deletes it). */
+export interface HandedOverFile {
+  path: string
+  op: 'edit' | 'create' | 'delete'
+  baseContent: string | null
+  content: string | null
+}
+
+export interface HandedOverChangeDetail extends HandedOverChange {
+  files: HandedOverFile[]
+}
+
+/** The key environment's handed-over changes. */
+export async function fetchHandedOverChanges(
+  apiRoot: string,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<HandedOverChange[]> {
+  const res = await fetchImpl(`${apiRoot}/ext/v1/proposals`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) throw await failure(res)
+  return ((await res.json()) as { data: HandedOverChange[] }).data
+}
+
+/** One handed-over change with its files. */
+export async function fetchHandedOverChange(
+  apiRoot: string,
+  apiKey: string,
+  id: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<HandedOverChangeDetail> {
+  const res = await fetchImpl(`${apiRoot}/ext/v1/proposals/${encodeURIComponent(id)}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) throw await failure(res)
+  return ((await res.json()) as { data: HandedOverChangeDetail }).data
+}
