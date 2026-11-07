@@ -19,6 +19,7 @@ import { runLogin, runLoginStatus, runLogout } from './login.js'
 import { runRelease, runReleaseList, runReleaseRetry, runRollback } from './release.js'
 import { CLI_VERSION } from './client-info.js'
 import { serverCliNoticeSeen, startUpdateCheck } from './update-check.js'
+import { runGitCredential, runRemoteAdd, runRemoteRemove } from './git-remote.js'
 
 export { runLink } from './link.js'
 export { runClone } from './clone.js'
@@ -34,6 +35,7 @@ export { runSourceDryRun } from './source-command.js'
 export { runScan } from './scan.js'
 export { runLogin, runLoginStatus, runLogout } from './login.js'
 export { runRelease, runReleaseList, runReleaseRetry, runRollback } from './release.js'
+export { runGitCredential, runRemoteAdd, runRemoteRemove } from './git-remote.js'
 export * from './scan-rules.js'
 export * from './lock.js'
 export * from './merge.js'
@@ -65,12 +67,15 @@ Usage
   marcapony app env delete <NAME>
   marcapony app source --dry-run [--json]
   marcapony app migrate-config
+  marcapony app remote add [--env <name>] [--name marcapony] [--json]
+  marcapony app remote remove [--name marcapony] [--json]
   marcapony app release [--from <env>] [--title <text>] [--notes <text>] [--overwrite] [--acknowledge-warnings] [--yes] [--json]
   marcapony app release list [--json]
   marcapony app release retry <number> [--json]
   marcapony app rollback <number> [--yes] [--json]
   marcapony scan [--cwd <dir>] [--json]
   marcapony guide [--cwd <dir>]
+  marcapony git-credential <get|store|erase>   (run by git, not by hand)
 
 Commands
   login        Log in once from this machine: the CLI shows a code, you
@@ -136,6 +141,20 @@ Commands
   app migrate-config
                Rewrite marcapony.json to the current format and print what
                changed.
+  app remote add
+               Work with plain git: adds a remote (default name marcapony)
+               whose push goes to the branch of --env or of the linked
+               environment, and sets this CLI as git's credential helper for
+               it, in this repository's git config only. Then 'git push
+               marcapony' pushes; the platform scans the push and, where the
+               environment builds on push, builds and deploys it. 'git fetch
+               marcapony' shows the environments' scanned heads.
+  app remote remove
+               Remove that remote and its credential helper lines.
+  git-credential
+               Git's credential helper, set by app remote add: hands git a
+               short-lived password made from your login or the folder's
+               deploy key. Prints nothing else.
   scan         Run the secret scan alone over the files a deploy would save,
                for a pre-commit hook or CI. Prints path:line, the rule and the
                first four characters of the value. A line with a
@@ -162,6 +181,7 @@ Options
                     with --yes (--yes alone stops at warnings)
   --ci              Make a key for a CI pipeline (link only)
   --cwd <dir>       Project directory (defaults to the current directory)
+  --name <remote>   The git remote's name (app remote; defaults to marcapony)
   --message <text>  Version message saved with the source (deploy only)
   --no-source       Do not save the project source with this deploy
   --force           Deploy even though the environment has changes you have not
@@ -246,8 +266,29 @@ function stringFlag(flags: Record<string, string | boolean>, name: string): stri
   return typeof value === 'string' ? value : undefined
 }
 
-export async function main(argv: string[]): Promise<number> {
+/** Where `git-credential` reads and writes; tests pass their own. */
+export interface CredentialHelperIo {
+  readInput?: () => Promise<string>
+  write?: (text: string) => void
+  warn?: (message: string) => void
+}
+
+export async function main(argv: string[], io: CredentialHelperIo = {}): Promise<number> {
   const { command, flags } = parseArgs(argv)
+
+  // Git runs the credential helper and reads its stdout. It answers before
+  // anything else: no update check (no registry call, no notice on stderr
+  // during a push), no saved-API line. The API comes from the remote's host.
+  if (command[0] === 'git-credential') {
+    return await runGitCredential({
+      action: command[1],
+      cwd: stringFlag(flags, 'cwd') ?? process.cwd(),
+      env: process.env,
+      input: await (io.readInput ?? (() => readStdin()))(),
+      write: io.write ?? ((text) => process.stdout.write(text)),
+      warn: io.warn ?? ((message) => console.error(message)),
+    })
+  }
 
   if (flags.version || flags.v) {
     console.log(VERSION)
@@ -465,6 +506,28 @@ async function run(command: string[], flags: Record<string, string | boolean>): 
       const plan = runSourceDryRun({ cwd, log })
       if (json) console.log(JSON.stringify({ ok: true, ...plan }))
       return EXIT.ok
+    }
+    if (namespace === 'app' && action === 'remote') {
+      const [, , sub] = command
+      const name = stringFlag(flags, 'name')
+      if (sub === 'add') {
+        const result = await runRemoteAdd({
+          cwd,
+          cliEnv,
+          env: process.env,
+          envName: stringFlag(flags, 'env'),
+          name,
+          log,
+        })
+        if (json) console.log(JSON.stringify({ ok: true, ...result }))
+        return EXIT.ok
+      }
+      if (sub === 'remove') {
+        const result = await runRemoteRemove({ cwd, name, log })
+        if (json) console.log(JSON.stringify({ ok: true, ...result }))
+        return EXIT.ok
+      }
+      throw new CliError('Usage: marcapony app remote add | remove', { exitCode: EXIT.failed })
     }
     if (namespace === 'app' && action === 'migrate-config') {
       const result = runMigrateConfig({ cwd, log })
