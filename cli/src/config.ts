@@ -133,9 +133,21 @@ export function isCliEnv(name: string): name is CliEnv {
   return Object.hasOwn(API_ROOTS, name)
 }
 
-/** The environment whose API root this is, or undefined for any other URL. */
-export function cliEnvOfApiRoot(apiRoot: string): CliEnv | undefined {
-  return (Object.keys(API_ROOTS) as CliEnv[]).find((name) => API_ROOTS[name] === apiRoot)
+/**
+ * The environment whose API this URL points at, compared by origin (so a
+ * trailing slash or an `/ext/v1` path still matches), or undefined for any
+ * other host.
+ */
+export function cliEnvOfApiRoot(url: string): CliEnv | undefined {
+  let origin: string
+  try {
+    origin = new URL(url).origin
+  } catch {
+    return undefined
+  }
+  return (Object.keys(API_ROOTS) as CliEnv[]).find(
+    (name) => new URL(API_ROOTS[name]).origin === origin,
+  )
 }
 
 export function resolveApiRoot(cliEnv?: string): string {
@@ -239,6 +251,15 @@ export function ensureEnvFileIgnored(cwd: string, file: string = ENV_FILE): bool
  * `marcapony app link` wrote into `.env.local` (or `.dev.vars` in a project
  * linked before version 2).
  */
+/** The API URL a key-linked folder was linked against (`MARCAPONY_API_URL`), if any. */
+export function readLinkedApiUrl(cwd: string): string | null {
+  return (
+    parseEnvLines(readEnvFile(cwd, ENV_FILE)).MARCAPONY_API_URL ??
+    parseEnvLines(readEnvFile(cwd, LEGACY_ENV_FILE)).MARCAPONY_API_URL ??
+    null
+  )
+}
+
 export function resolveApiKey(cwd: string, env: NodeJS.ProcessEnv): string | null {
   if (env.MARCAPONY_API_KEY) return env.MARCAPONY_API_KEY
   return (
