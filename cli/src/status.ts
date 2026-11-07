@@ -72,7 +72,8 @@ export async function runStatus(options: {
     `Platform     ${head.head ? head.head.slice(0, 7) : 'no source yet'}${head.stale ? ' (could not refresh)' : ''}`,
   )
   if (head.movedBy) {
-    log(`             ${describeMovedBy(head.movedBy)}${head.movedBy.forced ? ', forced' : ''}`)
+    const forced = head.movedBy.forced && head.movedBy.kind !== 'push' ? ', forced' : ''
+    log(`             ${describeMovedBy(head.movedBy)}${forced}`)
   }
   log(`This project ${entry ? (base ? base.slice(0, 7) : 'no base') : 'never synced'}`)
   if (head.scan) log(`Check        ${head.scan}`)

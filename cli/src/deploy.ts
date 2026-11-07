@@ -434,9 +434,14 @@ function resolveBase(cwd: string, head: SourceHead, force: boolean): string | nu
   })
 }
 
+/** "A git push landed", "Ayşe pushed": only a sentence without a verb needs one. */
+function landed(movedBy: NonNullable<SourceHead['movedBy']>): boolean {
+  return movedBy.kind === 'proposal' || (movedBy.kind === 'push' && !movedBy.name)
+}
+
 export function remoteChangesMessage(head: SourceHead): string {
   const who = head.movedBy
-    ? `${describeMovedBy(head.movedBy)}${head.movedBy.kind === 'proposal' ? ' landed' : ''}`
+    ? `${describeMovedBy(head.movedBy)}${landed(head.movedBy) ? ' landed' : ''}`
     : 'The environment has new commits'
   return `${who} after your last sync. Run \`marcapony app pull\`, or \`marcapony app deploy --force\` to replace them.`
 }

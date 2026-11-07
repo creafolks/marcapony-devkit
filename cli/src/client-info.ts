@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 // Kept in step with cli/package.json by a test: `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-export const CLI_VERSION = '0.13.0'
+export const CLI_VERSION = '0.13.1'
 
 export const CLI_VERSION_HEADER = 'X-Marcapony-Cli'
 export const SDK_VERSION_HEADER = 'X-Marcapony-Sdk'

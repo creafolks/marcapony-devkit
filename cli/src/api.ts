@@ -121,14 +121,16 @@ export type SourceReadGrant = Omit<SourceGrant, 'grantId' | 'headBefore' | 'sour
 /**
  * Who moved the environment's head. For an approved change committed by the
  * platform, `kind` is `proposal`, `proposedBy` says who wrote it and `name`
- * who approved it; `version` is null until its build deployed it.
+ * who approved it; `version` is null until its build deployed it. For a git
+ * push whose build has not deployed yet, `kind` is `push` and `name` is the
+ * pusher (null for a push with a deploy key).
  */
 export interface MovedBy {
   name: string | null
   version: number | null
   at: string
   forced: boolean
-  kind?: 'proposal'
+  kind?: 'proposal' | 'push'
   proposalId?: string
   proposedBy?: 'marco' | 'mcp' | 'system'
 }
@@ -139,8 +141,15 @@ const PROPOSERS: Record<NonNullable<MovedBy['proposedBy']>, string> = {
   system: 'A platform change',
 }
 
-/** "Ayşe deployed version 15", or "Marco's change, approved by Ayşe (version 15)". */
+/**
+ * "Ayşe deployed version 15", "Marco's change, approved by Ayşe (version 15)",
+ * or "Ayşe pushed (forced)". A push says whether it was forced itself.
+ */
 export function describeMovedBy(movedBy: MovedBy): string {
+  if (movedBy.kind === 'push') {
+    const forced = movedBy.forced ? ' (forced)' : ''
+    return movedBy.name ? `${movedBy.name} pushed${forced}` : `A git push${forced}`
+  }
   const version = movedBy.version === null ? '' : ` (version ${movedBy.version})`
   if (movedBy.kind === 'proposal') {
     const change = (movedBy.proposedBy && PROPOSERS[movedBy.proposedBy]) || 'An approved change'
