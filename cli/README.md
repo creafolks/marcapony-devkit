@@ -49,7 +49,8 @@ npx marcapony app release retry 4
 ```
 
 `release` shows the changes and anything that blocks the release, asks you to
-confirm (`--yes` skips the prompt), and waits until the release is live. These
+confirm (`--yes` skips the prompt; a version with warnings also needs
+`--acknowledge-warnings`), and waits until the release is live. These
 commands need your login: an app key, even one for production, cannot take a
 version live.
 
