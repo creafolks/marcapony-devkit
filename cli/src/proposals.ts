@@ -5,7 +5,8 @@ import {
   fetchHandedOverChanges,
   type HandedOverChange,
 } from './api.js'
-import { readConfig, resolveApiKey, resolveApiRoot } from './config.js'
+import { readConfig, resolveApiRoot } from './config.js'
+import { resolveDeployKey } from './credentials.js'
 import {
   type FileConflicts,
   type PullFileAction,
@@ -50,14 +51,22 @@ export interface ProposalPullResult {
   conflicts?: { proposalId: string; files: FileConflicts[] }
 }
 
-function linked(options: ProposalsOptions): { apiRoot: string; apiKey: string } {
-  const apiKey = resolveApiKey(options.cwd, options.env)
-  if (!readConfig(options.cwd) || !apiKey) {
+async function linked(options: ProposalsOptions): Promise<{ apiRoot: string; apiKey: string }> {
+  const apiRoot = resolveApiRoot(options.cliEnv)
+  const apiKey = readConfig(options.cwd)
+    ? await resolveDeployKey({
+        cwd: options.cwd,
+        env: options.env,
+        apiRoot,
+        fetchImpl: options.fetchImpl,
+      })
+    : null
+  if (!apiKey) {
     throw new CliError('This project is not linked. Run `marcapony app link` first.', {
       exitCode: EXIT.notLinked,
     })
   }
-  return { apiRoot: resolveApiRoot(options.cliEnv), apiKey }
+  return { apiRoot, apiKey }
 }
 
 function short(id: string): string {
@@ -68,7 +77,7 @@ export async function runProposalsList(
   options: ProposalsOptions,
 ): Promise<{ proposals: HandedOverChange[] }> {
   const log = options.log ?? console.log
-  const { apiRoot, apiKey } = linked(options)
+  const { apiRoot, apiKey } = await linked(options)
   const proposals = await fetchHandedOverChanges(apiRoot, apiKey, options.fetchImpl ?? fetch)
   if (proposals.length === 0) {
     log('No changes are waiting for this environment.')
@@ -89,7 +98,7 @@ export async function runProposalPull(options: ProposalPullOptions): Promise<Pro
   if (!options.id) {
     throw new CliError('Usage: marcapony app proposals pull <id>', { exitCode: EXIT.failed })
   }
-  const { apiRoot, apiKey } = linked(options)
+  const { apiRoot, apiKey } = await linked(options)
   const change = await fetchHandedOverChange(
     apiRoot,
     apiKey,

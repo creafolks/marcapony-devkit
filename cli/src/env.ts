@@ -1,5 +1,6 @@
 import { CliError, EXIT } from './api.js'
-import { readConfig, resolveApiKey, resolveApiRoot } from './config.js'
+import { readConfig, resolveApiRoot } from './config.js'
+import { resolveDeployKey } from './credentials.js'
 
 /**
  * `marcapony app env set | list | delete`: the environment's own settings and
@@ -28,18 +29,22 @@ export interface EnvOptions {
 
 const NAME = /^[A-Z][A-Z0-9_]{0,63}$/
 
-function context(options: EnvOptions): {
+async function context(options: EnvOptions): Promise<{
   apiRoot: string
   apiKey: string
   fetchImpl: typeof fetch
-} {
-  const apiKey = resolveApiKey(options.cwd, options.env)
-  if (!readConfig(options.cwd) || !apiKey) {
+}> {
+  const apiRoot = resolveApiRoot(options.cliEnv)
+  const fetchImpl = options.fetchImpl ?? fetch
+  const apiKey = readConfig(options.cwd)
+    ? await resolveDeployKey({ cwd: options.cwd, env: options.env, apiRoot, fetchImpl })
+    : null
+  if (!apiKey) {
     throw new CliError('This project is not linked. Run `marcapony app link` first.', {
       exitCode: EXIT.notLinked,
     })
   }
-  return { apiRoot: resolveApiRoot(options.cliEnv), apiKey, fetchImpl: options.fetchImpl ?? fetch }
+  return { apiRoot, apiKey, fetchImpl }
 }
 
 async function failure(res: Response): Promise<CliError> {
@@ -72,7 +77,7 @@ function checkName(name: string | undefined): string {
 
 export async function runEnvList(options: EnvOptions & { show?: boolean }): Promise<EnvValue[]> {
   const log = options.log ?? console.log
-  const { apiRoot, apiKey, fetchImpl } = context(options)
+  const { apiRoot, apiKey, fetchImpl } = await context(options)
   const res = await fetchImpl(`${apiRoot}/ext/v1/environment-values`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   })
@@ -99,7 +104,7 @@ export async function runEnvSet(
 ): Promise<{ name: string; kind: 'setting' | 'secret'; live: string }> {
   const log = options.log ?? console.log
   const name = checkName(options.name)
-  const { apiRoot, apiKey, fetchImpl } = context(options)
+  const { apiRoot, apiKey, fetchImpl } = await context(options)
   const value = await options.readValue()
   if (value.length === 0) {
     throw new CliError('The value is empty. Nothing was saved.', { exitCode: EXIT.refused })
@@ -127,7 +132,7 @@ export async function runEnvDelete(
 ): Promise<{ name: string; live: string }> {
   const log = options.log ?? console.log
   const name = checkName(options.name)
-  const { apiRoot, apiKey, fetchImpl } = context(options)
+  const { apiRoot, apiKey, fetchImpl } = await context(options)
   const res = await fetchImpl(`${apiRoot}/ext/v1/environment-values/${encodeURIComponent(name)}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${apiKey}` },

@@ -14,6 +14,8 @@ import { readHidden, readStdin, runEnvDelete, runEnvList, runEnvSet } from './en
 import { runMigrateConfig } from './migrate.js'
 import { runSourceDryRun } from './source-command.js'
 import { runScan } from './scan.js'
+import { runLogin, runLoginStatus, runLogout } from './login.js'
+import { runRelease, runReleaseList, runReleaseRetry, runRollback } from './release.js'
 
 export { runLink } from './link.js'
 export { runClone } from './clone.js'
@@ -27,6 +29,8 @@ export { runEnvDelete, runEnvList, runEnvSet } from './env.js'
 export { migrateConfig, runMigrateConfig } from './migrate.js'
 export { runSourceDryRun } from './source-command.js'
 export { runScan } from './scan.js'
+export { runLogin, runLoginStatus, runLogout } from './login.js'
+export { runRelease, runReleaseList, runReleaseRetry, runRollback } from './release.js'
 export * from './scan-rules.js'
 export * from './lock.js'
 export * from './merge.js'
@@ -37,12 +41,17 @@ export * from './agents.js'
 
 // Kept in step with cli/package.json by a test — `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.10.0'
+const VERSION = '0.11.0'
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
 Usage
+  marcapony login [--account <slug>] [--no-browser] [--insecure-file] [--json]
+  marcapony logout [--account <slug>] [--json]
+  marcapony login status [--json]
   marcapony app link [--code <code>] [--ci] [--cwd <dir>]
+  marcapony app link [--app <slug>] [--env <name>] [--account <slug>]   (logged in)
+  marcapony app link --refresh
   marcapony app clone <dir> --code <code>
   marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--direct] [--json]
   marcapony app status [--cwd <dir>] [--json]
@@ -54,11 +63,28 @@ Usage
   marcapony app env delete <NAME>
   marcapony app source --dry-run [--json]
   marcapony app migrate-config
+  marcapony app release [--from <env>] [--title <text>] [--notes <text>] [--overwrite] [--yes] [--json]
+  marcapony app release list [--json]
+  marcapony app release retry <number> [--json]
+  marcapony app rollback <number> [--yes] [--json]
   marcapony scan [--cwd <dir>] [--json]
   marcapony guide [--cwd <dir>]
 
 Commands
-  app link     Exchange a one-time pairing code for this project's environment
+  login        Log in once from this machine: the CLI shows a code, you
+               approve it in the dashboard and pick the business. The login
+               is kept in the system keychain, never in a project, and works
+               in that one business. Unused for 90 days, it expires.
+  logout       Revoke the login on the platform and remove it from the
+               keychain.
+  login status Every login on this machine, and the credential the current
+               folder deploys with.
+  app link     Logged in: pick the app and environment (or pass --app and
+               --env); writes .marcapony/project.json and a data-only key for
+               local runs, and every deploy uses your login. --refresh moves a
+               folder linked with a pairing code to your login and revokes its
+               old deploy key. Without a login:
+               Exchange a one-time pairing code for this project's environment
                key. Writes .env.local, marcapony.json and AGENTS.md. Get the code
                from the app's page in your Marcapony dashboard. Keys last 90
                days; linking again renews the key and revokes your earlier one
@@ -98,6 +124,11 @@ Commands
                running app. A value is never taken from the command line:
                type it at the hidden prompt or pipe it in. Secrets are never
                shown again.
+  app release  Take the test environment's live version to production as one
+               release: shows the changes and anything blocking it, asks to
+               confirm, and waits until it is live. list shows the releases,
+               retry <n> retries a failed one. Needs your login.
+  app rollback Roll production back to an earlier release. Needs your login.
   app source   With --dry-run, list the files the next deploy saves and the
                rule that skipped each other one.
   app migrate-config
@@ -114,6 +145,16 @@ Commands
 
 Options
   --code <code>     Pairing code (link only; prompted when omitted)
+  --account <slug>  The business (login, logout, link when logged in to several)
+  --insecure-file   Keep the login in a file only you can read, for machines
+                    without a keychain
+  --no-browser      Print the login URL without opening a browser
+  --app, --env      The app and environment to link to (link when logged in)
+  --refresh         Move a folder linked with a pairing code to your login
+  --from <env>      The environment to release from (release; defaults to the
+                    only one with a live version)
+  --title, --notes  The release's title and notes (release)
+  --overwrite       Release even though production has changes it would replace
   --ci              Make a key for a CI pipeline (link only)
   --cwd <dir>       Project directory (defaults to the current directory)
   --message <text>  Version message saved with the source (deploy only)
@@ -135,7 +176,7 @@ Options
 Exit codes
   0 done, 1 error, 2 the environment has changes to pull, 3 conflicts to
   resolve, 4 refused by the platform, 5 project not linked, 6 the secret
-  scan found possible secrets
+  scan found possible secrets, 7 not logged in or the login expired
 `
 
 export interface ParsedArgs {
@@ -160,6 +201,10 @@ const BOOLEAN_FLAGS = new Set([
   'show',
   'dry-run',
   'ci',
+  'insecure-file',
+  'no-browser',
+  'refresh',
+  'overwrite',
 ])
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -214,17 +259,90 @@ export async function main(argv: string[]): Promise<number> {
       await runGuide({ cwd, cliEnv, env: process.env })
       return 0
     }
+    const json = flags.json === true
+    const out = json ? (m: string) => console.error(m) : (m: string) => console.log(m)
+    const interactive = !json && process.stdin.isTTY === true && process.stdout.isTTY === true
+    if (namespace === 'login' && action === 'status') {
+      const result = await runLoginStatus({ cwd, cliEnv, env: process.env, log: out })
+      if (json) console.log(JSON.stringify({ ok: true, ...result }))
+      return EXIT.ok
+    }
+    if (namespace === 'login') {
+      const result = await runLogin({
+        cliEnv,
+        account: stringFlag(flags, 'account'),
+        insecureFile: flags['insecure-file'] === true,
+        noBrowser: flags['no-browser'] === true,
+        cliVersion: VERSION,
+        interactive: process.stdout.isTTY === true,
+        log: out,
+      })
+      if (json) console.log(JSON.stringify({ ok: true, ...result }))
+      return EXIT.ok
+    }
+    if (namespace === 'logout') {
+      const result = await runLogout({
+        cwd,
+        cliEnv,
+        account: stringFlag(flags, 'account'),
+        log: out,
+      })
+      if (json) console.log(JSON.stringify({ ok: true, ...result }))
+      return EXIT.ok
+    }
     if (namespace === 'app' && action === 'link') {
       await runLink({
         cwd,
         cliEnv,
         code: stringFlag(flags, 'code'),
         ci: flags.ci === true,
+        app: stringFlag(flags, 'app'),
+        envName: stringFlag(flags, 'env'),
+        account: stringFlag(flags, 'account'),
+        refresh: flags.refresh === true,
         env: process.env,
       })
       return 0
     }
-    const json = flags.json === true
+    if (namespace === 'app' && action === 'release') {
+      const [, , sub, number] = command
+      const base = { cwd, cliEnv, log: out }
+      const result =
+        sub === 'list'
+          ? await runReleaseList(base)
+          : sub === 'retry'
+            ? await runReleaseRetry({ ...base, number })
+            : sub === undefined
+              ? await runRelease({
+                  ...base,
+                  from: stringFlag(flags, 'from'),
+                  title: stringFlag(flags, 'title'),
+                  notes: stringFlag(flags, 'notes'),
+                  overwrite: flags.overwrite === true,
+                  yes: flags.yes === true,
+                  confirm: interactive ? askYesNo : undefined,
+                })
+              : null
+      if (!result) {
+        throw new CliError('Usage: marcapony app release [list | retry <number>]', {
+          exitCode: EXIT.failed,
+        })
+      }
+      if (json) console.log(JSON.stringify({ ok: true, ...result }))
+      return EXIT.ok
+    }
+    if (namespace === 'app' && action === 'rollback') {
+      const result = await runRollback({
+        cwd,
+        cliEnv,
+        log: out,
+        number: command[2],
+        yes: flags.yes === true,
+        confirm: interactive ? askYesNo : undefined,
+      })
+      if (json) console.log(JSON.stringify({ ok: true, ...result }))
+      return EXIT.ok
+    }
     if (namespace === 'app' && action === 'clone') {
       const log = json ? (m: string) => console.error(m) : (m: string) => console.log(m)
       const result = await runClone({
