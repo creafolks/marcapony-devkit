@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline/promises'
 import { CliError, EXIT } from './api.js'
 import { runDeployDetailed } from './deploy.js'
 import { runLink } from './link.js'
+import { runClone } from './clone.js'
 import { runGuide } from './guide.js'
 import { runPull } from './pull.js'
 import { runStatus } from './status.js'
@@ -14,6 +15,7 @@ import { runSourceDryRun } from './source-command.js'
 import { runScan } from './scan.js'
 
 export { runLink } from './link.js'
+export { runClone } from './clone.js'
 export { runDeploy, runDeployDetailed } from './deploy.js'
 export { runGuide } from './guide.js'
 export { runPull } from './pull.js'
@@ -32,12 +34,13 @@ export * from './agents.js'
 
 // Kept in step with cli/package.json by a test — `marcapony --version` is the
 // first thing a bug report quotes, so it must not drift from what was shipped.
-const VERSION = '0.7.0'
+const VERSION = '0.8.0'
 
 const USAGE = `marcapony — build and deploy Marcapony apps
 
 Usage
   marcapony app link [--code <code>] [--ci] [--cwd <dir>]
+  marcapony app clone <dir> --code <code>
   marcapony app deploy [--cwd <dir>] [--message <text>] [--no-source] [--force] [--json]
   marcapony app status [--cwd <dir>] [--json]
   marcapony app pull [--cwd <dir>] [--patch] [--check] [--yes] [--json]
@@ -57,6 +60,10 @@ Commands
                for the environment. With --ci the key is labelled for a
                pipeline: store it in the pipeline's secret store as
                MARCAPONY_API_KEY, and earlier keys stay valid.
+  app clone    Clone an environment's saved source into a new or empty
+               directory and link it with a pairing code, ready to edit and
+               deploy. The read token is passed to git
+               only; it is never printed or stored.
   app deploy   Run the project's build, upload the bundle, and wait until it is
                live. The target environment comes from the key — there is no
                --env flag. The project source is saved with each deploy;
@@ -197,6 +204,18 @@ export async function main(argv: string[]): Promise<number> {
       return 0
     }
     const json = flags.json === true
+    if (namespace === 'app' && action === 'clone') {
+      const log = json ? (m: string) => console.error(m) : (m: string) => console.log(m)
+      const result = await runClone({
+        cwd,
+        cliEnv,
+        dir: command[2],
+        code: stringFlag(flags, 'code'),
+        log,
+      })
+      if (json) console.log(JSON.stringify({ ok: true, ...result }))
+      return EXIT.ok
+    }
     // With --json, progress goes to stderr so stdout is one JSON document.
     const log = json ? (m: string) => console.error(m) : (m: string) => console.log(m)
     if (namespace === 'scan') {

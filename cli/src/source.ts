@@ -8,6 +8,8 @@ import { isManifestV2, publicDirOf, serverPathOf, type MarcaponyConfig } from '.
 import type { SourceGrant } from './api.js'
 import { decideIgnore, parseIgnoreRules, type IgnoreRule } from './ignore.js'
 import {
+  CREDENTIAL_FILE,
+  FORBIDDEN_DIRS,
   MAX_SCAN_BYTES as MAX_SCAN_FILE_BYTES,
   blockingFindings,
   isUnscannable,
@@ -27,11 +29,10 @@ export { parseIgnoreRules, type IgnoreRule } from './ignore.js'
 export const MAX_SOURCE_BYTES = 20 * 1024 * 1024
 export const MAX_SOURCE_FILES = 5000
 
-const ALWAYS_IGNORED_DIRS = new Set(['node_modules', '.git', '.wrangler', '.marcapony'])
-// Files that hold credentials by convention; never read, whatever the ignore
-// rules say. `.dev.vars.<env>` and `.env.<anything>` are the local env files.
-const ALWAYS_IGNORED_FILE =
-  /^(\.dev\.vars(\..*)?|\.env(\..*)?|\.npmrc|\.netrc|.*\.pem|.*\.key|.*\.p12|.*\.pfx|id_(rsa|dsa|ecdsa|ed25519))$/
+// Shared with the platform's scan (scan-rules.ts), so the CLI never pushes what
+// the platform would block.
+const ALWAYS_IGNORED_DIRS = new Set(FORBIDDEN_DIRS)
+const ALWAYS_IGNORED_FILE = CREDENTIAL_FILE
 
 /** First path segment of the build outputs named in marcapony.json. */
 export function buildOutputDirs(config: MarcaponyConfig): string[] {

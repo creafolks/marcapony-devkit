@@ -7,7 +7,7 @@
  * RULE_SET_VERSION when a change should re-scan stored versions.
  */
 
-export const RULE_SET_VERSION = 1
+export const RULE_SET_VERSION = 2
 
 /** Files larger than this are not scanned for secrets (they are rarely source). */
 export const MAX_SCAN_BYTES = 1024 * 1024
@@ -300,4 +300,39 @@ export function scanText(path: string, text: string, options: ScanTextOptions): 
 /** The findings that block: everything that is not allowed. */
 export function blockingFindings(findings: ScanFinding[]): ScanFinding[] {
   return findings.filter((f) => !f.allowed)
+}
+
+/**
+ * Directory names that never belong in saved source, at any depth. The CLI
+ * never collects them, and the platform blocks a pushed commit that holds one.
+ */
+export const FORBIDDEN_DIRS: readonly string[] = ['node_modules', '.git', '.wrangler', '.marcapony']
+
+/**
+ * File names that hold credentials by convention: never read, whatever the
+ * ignore rules say, and blocked by the platform when pushed anyway.
+ * `.dev.vars.<env>` and `.env.<anything>` are the local env files.
+ */
+export const CREDENTIAL_FILE =
+  /^(\.dev\.vars(\..*)?|\.env(\..*)?|\.npmrc|\.netrc|.*\.pem|.*\.key|.*\.p12|.*\.pfx|id_(rsa|dsa|ecdsa|ed25519))$/
+
+/** True when the name is the example env file a project commits on purpose. */
+function isEnvExample(name: string): boolean {
+  return /^\.env(\.[^.]+)*\.(example|sample|template)$/.test(name)
+}
+
+/**
+ * Why a repo path may not be saved, or null when it may: the first forbidden
+ * directory segment (`node_modules/`), or `credential file` for a credential
+ * file name. Paths are POSIX and relative to the project root.
+ */
+export function forbiddenPathReason(path: string): string | null {
+  const segments = path.split('/')
+  const name = segments.pop() ?? ''
+  for (const segment of segments) {
+    if (FORBIDDEN_DIRS.includes(segment)) return `${segment}/`
+  }
+  if (FORBIDDEN_DIRS.includes(name)) return `${name}/`
+  if (CREDENTIAL_FILE.test(name) && !isEnvExample(name)) return 'credential file'
+  return null
 }

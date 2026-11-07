@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import {
   ALLOW_COMMENT,
+  FORBIDDEN_DIRS,
+  forbiddenPathReason,
   blockingFindings,
   isUnscannable,
   jwtHasPrivateRole,
@@ -159,5 +161,35 @@ describe('long lines', () => {
     const started = performance.now()
     scanText('bundle.js', line, { side: 'server' })
     expect(performance.now() - started).toBeLessThan(500)
+  })
+})
+
+describe('forbiddenPathReason', () => {
+  it('names the forbidden directory at any depth', () => {
+    expect(forbiddenPathReason('node_modules/react/index.js')).toBe('node_modules/')
+    expect(forbiddenPathReason('packages/web/node_modules/x.js')).toBe('node_modules/')
+    expect(forbiddenPathReason('.wrangler/state/v3/d1.sqlite')).toBe('.wrangler/')
+    expect(forbiddenPathReason('sub/.git/config')).toBe('.git/')
+    expect(forbiddenPathReason('.marcapony/state.json')).toBe('.marcapony/')
+  })
+
+  it('flags credential file names but not committed examples', () => {
+    expect(forbiddenPathReason('.dev.vars')).toBe('credential file')
+    expect(forbiddenPathReason('config/.env.production')).toBe('credential file')
+    expect(forbiddenPathReason('certs/server.pem')).toBe('credential file')
+    expect(forbiddenPathReason('id_ed25519')).toBe('credential file')
+    expect(forbiddenPathReason('.env.example')).toBeNull()
+    expect(forbiddenPathReason('.env.local.example')).toBeNull()
+  })
+
+  it('allows ordinary paths and look-alikes', () => {
+    expect(forbiddenPathReason('src/node_modules.ts')).toBeNull()
+    expect(forbiddenPathReason('docs/git.md')).toBeNull()
+    expect(forbiddenPathReason('marcapony.lock')).toBeNull()
+    expect(forbiddenPathReason('src/keyboard.ts')).toBeNull()
+  })
+
+  it('lists the directories the CLI never collects', () => {
+    expect([...FORBIDDEN_DIRS].sort()).toEqual(['.git', '.marcapony', '.wrangler', 'node_modules'])
   })
 })
