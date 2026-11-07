@@ -15,7 +15,7 @@ export interface KeyInfo {
   id: string
   expiresAt: string | null
   /** `ci` for a key made with `marcapony app link --ci`, `local` for a project key. */
-  cliLabel: 'local' | 'ci' | null
+  cliLabel: 'local' | 'ci' | 'session' | 'dev' | null
 }
 
 export interface DeploymentView {
@@ -141,7 +141,7 @@ export interface Capability {
  * Stable exit codes, so scripts and agents can branch on the outcome without
  * reading the message: 0 done, 2 the remote has changes this project has not
  * pulled, 3 a pull left conflicts, 4 the server refused, 5 not linked, 6 the
- * secret scan found possible secrets.
+ * secret scan found possible secrets, 7 not logged in.
  */
 export const EXIT = {
   ok: 0,
@@ -152,6 +152,8 @@ export const EXIT = {
   notLinked: 5,
   /** `marcapony scan` found possible secrets. */
   secretsFound: 6,
+  /** Not logged in, or the login expired or was revoked: run `marcapony login`. */
+  loginRequired: 7,
 } as const
 
 export class CliError extends Error {
@@ -169,9 +171,11 @@ export class CliError extends Error {
       options.exitCode ??
       (options.code === 'remote_changes'
         ? EXIT.remoteChanges
-        : options.status !== undefined && options.status >= 400 && options.status < 500
-          ? EXIT.refused
-          : EXIT.failed)
+        : options.code === 'login_required'
+          ? EXIT.loginRequired
+          : options.status !== undefined && options.status >= 400 && options.status < 500
+            ? EXIT.refused
+            : EXIT.failed)
   }
 }
 

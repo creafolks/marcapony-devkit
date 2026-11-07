@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process'
 import { CliError, EXIT, fetchSourceHead, fetchSourceReadGrant, type SourceHead } from './api.js'
-import { readConfig, resolveApiKey, resolveApiRoot } from './config.js'
+import { readConfig, resolveApiRoot } from './config.js'
+import { resolveDeployKey } from './credentials.js'
 import { readBase, writeBase } from './lock.js'
 import { unifiedDiff } from './merge.js'
 import { readRemoteFiles } from './source.js'
@@ -72,7 +73,14 @@ export async function runPull(options: PullOptions): Promise<PullResult> {
   const fetchImpl = options.fetchImpl ?? fetch
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   const config = readConfig(options.cwd)
-  const apiKey = resolveApiKey(options.cwd, options.env)
+  const apiKey = config
+    ? await resolveDeployKey({
+        cwd: options.cwd,
+        env: options.env,
+        apiRoot: resolveApiRoot(options.cliEnv),
+        fetchImpl,
+      })
+    : null
   if (!config || !apiKey) {
     throw new CliError('This project is not linked. Run `marcapony app link` first.', {
       exitCode: EXIT.notLinked,

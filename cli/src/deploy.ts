@@ -22,11 +22,11 @@ import {
   isManifestV2,
   publicDirOf,
   readConfig,
-  resolveApiKey,
   resolveApiRoot,
   serverPathOf,
   type MarcaponyConfig,
 } from './config.js'
+import { resolveDeployKey } from './credentials.js'
 import { localGitHead, readBase, writeBase } from './lock.js'
 import { CONFLICT_MARKER } from './merge.js'
 import {
@@ -123,14 +123,14 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
     })
   }
 
-  const apiKey = resolveApiKey(options.cwd, options.env)
+  const apiRoot = resolveApiRoot(options.cliEnv)
+  const apiKey = await resolveDeployKey({ cwd: options.cwd, env: options.env, apiRoot, fetchImpl })
   if (!apiKey) {
     throw new CliError(
-      'No MARCAPONY_API_KEY found in the environment or .dev.vars. Run `marcapony app link` first.',
+      'No MARCAPONY_API_KEY found in the environment or .env.local, and no login. Run `marcapony app link` first.',
       { exitCode: EXIT.notLinked },
     )
   }
-  const apiRoot = resolveApiRoot(options.cliEnv)
   const force = options.force === true
   const direct = options.direct === true
 
@@ -301,7 +301,7 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
 function releaseOnlyError(err: CliError, direct: boolean): CliError {
   const hint = direct
     ? 'Allow a one-time direct deploy on the app page in the dashboard (it stays valid for 30 minutes), then run `marcapony app deploy --direct` again.'
-    : 'To ship a hotfix straight to production instead, allow a one-time direct deploy on the app page and run `marcapony app deploy --direct`.'
+    : 'Deploy to the test environment and take it live with `marcapony app release` (needs `marcapony login`). To ship a hotfix straight to production instead, allow a one-time direct deploy on the app page and run `marcapony app deploy --direct`.'
   return new CliError(`${err.message} ${hint}`, {
     code: err.code,
     status: err.status,
@@ -349,7 +349,8 @@ export async function warnIfKeyExpiring(
   } catch {
     return
   }
-  if (!info?.expiresAt) return
+  // A login's session key lives an hour by design; it is renewed every command.
+  if (!info?.expiresAt || info.cliLabel === 'session') return
   const days = Math.ceil((new Date(info.expiresAt).getTime() - now.getTime()) / 86_400_000)
   if (!Number.isFinite(days) || days > KEY_EXPIRY_WARNING_DAYS) return
   const command = info.cliLabel === 'ci' ? 'marcapony app link --ci' : 'marcapony app link'

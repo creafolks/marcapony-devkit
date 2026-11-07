@@ -1,5 +1,6 @@
 import { CliError, EXIT, fetchSourceHead, type SourceHead } from './api.js'
-import { readConfig, resolveApiKey, resolveApiRoot } from './config.js'
+import { readConfig, resolveApiRoot } from './config.js'
+import { resolveDeployKey } from './credentials.js'
 import { readBase } from './lock.js'
 
 export interface StatusResult {
@@ -28,7 +29,14 @@ export async function runStatus(options: {
 }): Promise<StatusResult> {
   const log = options.log ?? console.log
   const config = readConfig(options.cwd)
-  const apiKey = resolveApiKey(options.cwd, options.env)
+  const apiKey = config
+    ? await resolveDeployKey({
+        cwd: options.cwd,
+        env: options.env,
+        apiRoot: resolveApiRoot(options.cliEnv),
+        fetchImpl: options.fetchImpl,
+      })
+    : null
   if (!config || !apiKey) {
     throw new CliError('This project is not linked. Run `marcapony app link` first.', {
       exitCode: EXIT.notLinked,

@@ -8,6 +8,52 @@ npx marcapony app link
 npx marcapony app deploy
 ```
 
+## `marcapony login`
+
+Log in once from your machine instead of keeping a deploy key in every project:
+
+```bash
+npx marcapony login            # shows a code; approve it in the dashboard and pick the business
+npx marcapony app link         # no pairing code: pick the app and environment
+npx marcapony app deploy       # uses your login
+```
+
+- The login is kept in the system keychain (macOS Keychain, Windows Credential
+  Manager, or the Secret Service on Linux), never in a project. It works in the
+  business you picked when you approved it; log in again with
+  `--account <slug>` for another one. Unused for 90 days, it expires.
+- A project linked this way gets `.marcapony/project.json` (the app and
+  environment, no secret; commit it) and a key in `.env.local` that your app
+  uses in local development. That key can read and write the environment's
+  data but cannot deploy or read the source.
+- `marcapony app link --refresh` moves a project linked with a pairing code to
+  your login and revokes its old deploy key.
+- `marcapony login status` lists your logins and says what the current folder
+  deploys with. `marcapony logout` revokes a login; so does "İptal et" under
+  Settings > Security in the dashboard.
+- No keychain (a server or container): use `MARCAPONY_API_KEY` from
+  `marcapony app link --ci`, or `marcapony login --insecure-file` to keep the
+  login in a file only you can read.
+
+Which credential a command uses: `MARCAPONY_API_KEY` from the environment
+first, then your login for a project linked with it, then the deploy key in
+`.env.local`.
+
+### Releases from the terminal
+
+```bash
+npx marcapony app release              # test's live version to production
+npx marcapony app release list
+npx marcapony app rollback 3
+npx marcapony app release retry 4
+```
+
+`release` shows the changes and anything that blocks the release, asks you to
+confirm (`--yes` skips the prompt; a version with warnings also needs
+`--acknowledge-warnings`), and waits until the release is live. These
+commands need your login: an app key, even one for production, cannot take a
+version live.
+
 ## `marcapony app link`
 
 Run once per project. Generate a one-time pairing code on the app's page in your
@@ -246,6 +292,7 @@ Exit codes:
 | 4    | Refused by Marcapony; the message says why             |
 | 5    | The project is not linked                              |
 | 6    | `marcapony scan` found possible secrets                |
+| 7    | Not logged in, or the login expired or was revoked     |
 
 ## Configuration reference
 
