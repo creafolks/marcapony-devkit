@@ -6,7 +6,7 @@ import { main, parseArgs } from '../index'
 import { parseEnvLines, resolveApiRoot, upsertEnvLines } from '../config'
 import { collectAssets, contentTypeFor, isIgnoredAsset, parseAssetsIgnore } from '../assets'
 import { runLink } from '../link'
-import { readSavedCliEnv, saveCliEnv } from '../cli-env'
+import { readSavedCliEnv, saveCliEnv, saveLoginCliEnv } from '../cli-env'
 import { runDeploy } from '../deploy'
 import {
   collectSourceFiles,
@@ -820,6 +820,32 @@ describe('source push', () => {
     expect(readSavedCliEnv(dir)).toBe('staging')
     writeFileSync(join(dir, '.marcapony', 'cli.json'), '{"cliEnv":"https://evil.example"}')
     expect(readSavedCliEnv(dir)).toBeUndefined()
+  })
+
+  it('a project linked with a login before cli.json existed keeps its API', () => {
+    mkdirSync(join(dir, '.marcapony'), { recursive: true })
+    writeFileSync(
+      join(dir, '.marcapony', 'project.json'),
+      JSON.stringify({
+        apiRoot: 'https://staging-api.marcapony.com',
+        accountId: 'acc-1',
+        accountSlug: 'abc',
+        appId: 'app-1',
+        appSlug: 'kaynak',
+        environment: 'test',
+      }),
+    )
+    expect(readSavedCliEnv(dir)).toBe('staging')
+  })
+
+  it('login never moves a project linked elsewhere, and saves nothing outside a project', () => {
+    saveLoginCliEnv(dir, 'staging')
+    expect(readSavedCliEnv(dir)).toBe(
+      existsSync(join(dir, 'marcapony.json')) ? 'staging' : undefined,
+    )
+    saveCliEnv(dir, 'local')
+    saveLoginCliEnv(dir, 'staging')
+    expect(readSavedCliEnv(dir)).toBe('local')
   })
 
   it('pushes the source with the granted token', async () => {

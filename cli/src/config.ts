@@ -133,6 +133,11 @@ export function isCliEnv(name: string): name is CliEnv {
   return Object.hasOwn(API_ROOTS, name)
 }
 
+/** The environment whose API root this is, or undefined for any other URL. */
+export function cliEnvOfApiRoot(apiRoot: string): CliEnv | undefined {
+  return (Object.keys(API_ROOTS) as CliEnv[]).find((name) => API_ROOTS[name] === apiRoot)
+}
+
 export function resolveApiRoot(cliEnv?: string): string {
   const name = (cliEnv ?? DEFAULT_CLI_ENV) as CliEnv
   const root = API_ROOTS[name]
