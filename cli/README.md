@@ -307,7 +307,7 @@ set `MARCAPONY_NO_UPDATE_CHECK=1` to turn it off. Update with
 `bun add -g marcapony@latest`, or `bun add -d marcapony@latest` in a project.
 
 Every request names the CLI version (`User-Agent` and `X-Marcapony-Cli`), and a
-deploy also names the project's `marcapony-sdk` version, so the dashboard can
+deploy also names the installed `marcapony-sdk` version, so the dashboard can
 show what built each version.
 
 ## Configuration reference

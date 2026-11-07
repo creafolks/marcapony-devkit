@@ -54,30 +54,19 @@ function readJson(path: string): Record<string, unknown> | null {
 }
 
 /**
- * The SDK version a project builds with: the installed package first, else
- * the range in the project's package.json. Null when the app does not use the
- * SDK. Only a plain version or range is returned, never other text.
+ * The SDK version a project builds with, from the installed package. Null
+ * when the app does not use the SDK or it is not installed: a range from
+ * package.json would be shown as the version and could raise a notice for an
+ * SDK that resolves to the latest.
  */
 export function projectSdkVersion(cwd: string): string | null {
   const installed = join(cwd, 'node_modules', SDK_PACKAGE, 'package.json')
-  if (existsSync(installed)) {
-    const version = readJson(installed)?.version
-    if (typeof version === 'string' && isVersionText(version)) return version
-  }
-  const pkg = readJson(join(cwd, 'package.json'))
-  if (!pkg) return null
-  for (const field of ['dependencies', 'devDependencies', 'peerDependencies']) {
-    const deps = pkg[field]
-    if (!deps || typeof deps !== 'object') continue
-    const range = (deps as Record<string, unknown>)[SDK_PACKAGE]
-    if (typeof range === 'string' && isVersionText(range)) return range
-  }
-  return null
+  if (!existsSync(installed)) return null
+  const version = readJson(installed)?.version
+  return typeof version === 'string' && isVersionText(version) ? version : null
 }
 
-/** A version or a simple range (`0.7.1`, `^0.7.1`, `~0.7`), short enough for a header. */
+/** A plain version (`0.7.1`, `1.0.0-beta.2`), short enough for a header. */
 function isVersionText(value: string): boolean {
-  return (
-    value.length <= 64 && /^[\^~>=<v\s]*\d+(\.\d+){0,2}([-+][0-9A-Za-z.-]+)?$/.test(value.trim())
-  )
+  return value.length <= 64 && /^\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/.test(value)
 }

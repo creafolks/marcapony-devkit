@@ -68,22 +68,24 @@ describe('client headers', () => {
 })
 
 describe('projectSdkVersion', () => {
-  it('reads the installed SDK first', () => {
+  it('reads the installed SDK', () => {
     mkdirSync(join(dir, 'node_modules', 'marcapony-sdk'), { recursive: true })
     writeFileSync(join(dir, 'node_modules', 'marcapony-sdk', 'package.json'), '{"version":"0.6.2"}')
     writeFileSync(join(dir, 'package.json'), '{"dependencies":{"marcapony-sdk":"^0.7.1"}}')
     expect(projectSdkVersion(dir)).toBe('0.6.2')
   })
 
-  it('falls back to the range in package.json', () => {
-    writeFileSync(join(dir, 'package.json'), '{"devDependencies":{"marcapony-sdk":"^0.7.1"}}')
-    expect(projectSdkVersion(dir)).toBe('^0.7.1')
+  it('is null when the SDK is not installed, even with a range in package.json', () => {
+    writeFileSync(join(dir, 'package.json'), '{"dependencies":{"marcapony-sdk":"^0.7.1"}}')
+    expect(projectSdkVersion(dir)).toBeNull()
   })
 
-  it('is null without the SDK, and for anything that is not a version', () => {
-    writeFileSync(join(dir, 'package.json'), '{"dependencies":{"hono":"^4"}}')
-    expect(projectSdkVersion(dir)).toBeNull()
-    writeFileSync(join(dir, 'package.json'), '{"dependencies":{"marcapony-sdk":"workspace:*"}}')
+  it('is null for an installed version that is not a plain version', () => {
+    mkdirSync(join(dir, 'node_modules', 'marcapony-sdk'), { recursive: true })
+    writeFileSync(
+      join(dir, 'node_modules', 'marcapony-sdk', 'package.json'),
+      '{"version":"latest"}',
+    )
     expect(projectSdkVersion(dir)).toBeNull()
   })
 })
