@@ -56,11 +56,20 @@ class ChatError extends Error {
   }
 }
 
+/**
+ * The saved conversation cannot go on (it reached its message limit, or it no
+ * longer exists), but a new one works right away.
+ */
+const CONVERSATION_ENDED = new Set(['conversation_limit_reached', 'not_found'])
+
 /** Shown instead of the raw error when the character cannot answer for now. */
 function friendly(err: unknown): string {
   if (err instanceof ChatError) {
     if (err.code === 'persona_unavailable' || err.code === 'feature_paused') {
       return 'The character is resting right now. Try again later.'
+    }
+    if (CONVERSATION_ENDED.has(err.code)) {
+      return 'This conversation has ended. Your next message starts a new one.'
     }
     if (err.code.endsWith('_cap') || err.code.endsWith('_reached')) {
       return 'The character has talked enough for today. Come back tomorrow.'
@@ -220,6 +229,10 @@ export function App() {
         await stream(id, trimmed, token)
       }
     } catch (err) {
+      if (err instanceof ChatError && CONVERSATION_ENDED.has(err.code)) {
+        // Forget the ended conversation; the next message starts a new one.
+        setSaved((previous) => ({ ...previous, conversationId: null, history: [] }))
+      }
       setError(friendly(err))
     } finally {
       setPartial(null)
