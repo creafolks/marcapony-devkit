@@ -30,6 +30,7 @@ up and build on it.
 | `booking`   | Signed-in customers see, book and cancel their appointments        | Customer portal |
 | `shop`      | Products, a cart and a checkout that sends the buyer to pay        | Your site       |
 | `team-tool` | Your team approves, rejects and completes the day's reservations | Dashboard       |
+| `character` | A character from your business that chats with visitors            | Your site       |
 
 Each template's `README.md` says which placement, data access, scopes and
 permissions to choose when you create the app under **My Apps** in the

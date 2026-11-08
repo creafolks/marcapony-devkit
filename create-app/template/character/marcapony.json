@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/marcapony/manifest.schema.json",
+  "manifest": 2,
+  "build": "bun run build",
+  "server": "dist/server/index.js",
+  "public": {
+    "dir": "dist/client"
+  },
+  "routes": {
+    "server": ["/api/*"],
+    "notFound": "spa"
+  },
+  "runtime": "2026-10",
+  "ignore": ["coverage/", "*.log"],
+  "placement": "public"
+}

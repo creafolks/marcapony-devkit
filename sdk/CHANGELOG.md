@@ -4,6 +4,50 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.8.0] - 2026-11-08
+
+### Added
+
+- `personas`: conversations with the account's characters from an app's
+  server. `list()` and `get(slug)` read the characters granted to the app;
+  `start(slug, options)` begins a conversation and
+  `resume(slug, id, { history, storesTranscripts, endUser })` continues a
+  stored one without a request. A chat has `send` (the whole answer), `stream`
+  (the answer as events), `report`, `verify` and `transcript`. Needs the
+  `personas:chat` scope. Only on the client from `createClient`, not on
+  `forRequest()`.
+- `chat.endUser`: a conversation started with `endUser` belongs to it, and
+  every later call (message, verify, report, transcript) must name the same
+  one or answers `NotFoundError`. The chat sends it for you; pass it to
+  `resume` as `{ endUser }`.
+- `chat.history`: the signed entries each message carries when the character
+  keeps no transcript, at most 30. Visitor messages are kept up to
+  `PERSONA_HISTORY_MAX_USER_CHARS` (2,000) characters and answers up to
+  `PERSONA_HISTORY_MAX_ANSWER_CHARS` (32,768). A failed turn adds nothing.
+- Messages are never sent twice, with one exception: when the API refuses the
+  history (`invalid_history`), a chat from `start` begins a new conversation
+  with the same options and sends the message there once, so `chat.id`
+  changes. A chat from `resume` throws `ValidationError` instead.
+- `personasHandler(mp, options)`: a request handler for the app's own chat
+  route. It keeps an anonymous visitor id in a signed `mp_eu` cookie (signed
+  with `MARCAPONY_APP_SECRET`) and names it on every call, forwards messages
+  and history, streams answers through, passes `Retry-After` on to the
+  browser, and supports an optional Turnstile check. `clientIp` sets where the
+  visitor's address comes from; the default, `cf-connecting-ip`, is only
+  trustworthy on Cloudflare.
+- Error classes `PersonaUnavailableError`, `PersonaLimitError` and
+  `VerificationRequiredError`, and the `PERSONA_LIMIT_CODES` list.
+  `invalid_history` maps to `ValidationError` and `service_unavailable` to
+  `ServerError`.
+
+### Changed
+
+- No request is retried on a character limit or pause (`PersonaLimitError`,
+  `PersonaUnavailableError`), whatever its status. Other retries are
+  unchanged, including waiting for `Retry-After` before an idempotent call is
+  sent again.
+- Every request sends `Accept: application/json`.
+
 ## [0.7.1] - 2026-10-31
 
 ### Changed

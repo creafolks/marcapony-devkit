@@ -47,6 +47,43 @@ export class RateLimitError extends MarcaponyError {
 export class ConflictError extends MarcaponyError {}
 export class ServerError extends MarcaponyError {}
 
+/**
+ * The character cannot answer this app right now: it is switched off, paused,
+ * not enabled for apps, or characters are paused platform-wide
+ * (`persona_unavailable`, `feature_paused`). Show something like "the
+ * shopkeeper is resting" instead of an error.
+ */
+export class PersonaUnavailableError extends MarcaponyError {}
+
+/**
+ * A spending or usage cap of characters was reached (see
+ * `PERSONA_LIMIT_CODES`; `code` says which). A cap does not clear in seconds,
+ * so no request is ever retried on one.
+ */
+export class PersonaLimitError extends MarcaponyError {}
+
+/**
+ * The conversation was started with `requireVerification` and needs a fresh
+ * bot check: verify the visitor (for example with Turnstile), call
+ * `chat.verify()`, then send the message again.
+ */
+export class VerificationRequiredError extends MarcaponyError {}
+
+/** The codes `PersonaLimitError` carries. */
+export const PERSONA_LIMIT_CODES = [
+  'account_daily_credit_cap',
+  'daily_limit_reached',
+  'monthly_limit_reached',
+  'persona_daily_cap',
+  'persona_monthly_cap',
+  'app_daily_cap',
+  'conversation_limit_reached',
+  'test_mode_daily_cap',
+  'beta_budget_reached',
+] as const
+
+export type PersonaLimitCode = (typeof PERSONA_LIMIT_CODES)[number]
+
 const ERROR_BY_CODE: Record<
   string,
   new (
@@ -68,6 +105,12 @@ const ERROR_BY_CODE: Record<
   scoped_route_required: PermissionDeniedError,
   identity_required: PermissionDeniedError,
   server_error: ServerError,
+  service_unavailable: ServerError,
+  invalid_history: ValidationError,
+  persona_unavailable: PersonaUnavailableError,
+  feature_paused: PersonaUnavailableError,
+  verification_required: VerificationRequiredError,
+  ...Object.fromEntries(PERSONA_LIMIT_CODES.map((code) => [code, PersonaLimitError])),
 }
 
 /**
@@ -116,4 +159,12 @@ export function errorFromResponse(
 
   const ErrorClass = ERROR_BY_CODE[code] ?? MarcaponyError
   return new ErrorClass(status, code, message, fields)
+}
+
+/**
+ * Whether an error must never be retried whatever its status: a character
+ * cap or a pause does not clear in seconds, and retrying it only adds load.
+ */
+export function isPermanentPersonaError(error: unknown): boolean {
+  return error instanceof PersonaLimitError || error instanceof PersonaUnavailableError
 }

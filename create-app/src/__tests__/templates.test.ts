@@ -310,3 +310,25 @@ describe('simulated writes', () => {
     expect(server('shop')).toContain('if (link.simulated)')
   })
 })
+
+// A character spends the account's money, so the scope is a choice the owner
+// makes by granting the character, never something a template asks for.
+describe('the character template', () => {
+  const server = readFileSync(join(ROOT, 'character', 'src/server/index.ts'), 'utf8')
+
+  it('is public and asks for no scope in its manifest', () => {
+    const raw = readFileSync(join(ROOT, 'character', 'marcapony.json'), 'utf8')
+    expect((JSON.parse(raw) as TemplateConfig).placement).toBe('public')
+    expect(raw).not.toContain('personas:chat')
+  })
+
+  it('serves the chat through personasHandler, limited to its own character', () => {
+    expect(server).toContain('personasHandler(')
+    expect(server).toContain("app.all('/api/chat/*'")
+    expect(server).toContain('personas: [personaSlug(c.env)]')
+  })
+
+  it('only falls back to a development secret when the app is not deployed', () => {
+    expect(server).toMatch(/if \(!env\.MARCAPONY_APP_ID\) return LOCAL_SECRET/)
+  })
+})

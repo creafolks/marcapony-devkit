@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "hono": "^4.13.0",
-    "marcapony-sdk": "^0.7.0",
+    "marcapony-sdk": "^0.8.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

@@ -32,6 +32,7 @@ export const TEMPLATES = [
   { name: 'booking', summary: 'Customers book and cancel appointments in the portal' },
   { name: 'shop', summary: 'Products, a cart and checkout with a payment link' },
   { name: 'team-tool', summary: "Your team approves and updates today's reservations" },
+  { name: 'character', summary: 'A character from your business that chats with visitors' },
 ] as const
 
 export type TemplateName = (typeof TEMPLATES)[number]['name']
