@@ -1,4 +1,10 @@
-import { errorFromResponse, MarcaponyError, RateLimitError, ServerError } from './errors.js'
+import {
+  errorFromResponse,
+  isPermanentPersonaError,
+  MarcaponyError,
+  RateLimitError,
+  ServerError,
+} from './errors.js'
 import type { ResolvedOptions } from './options.js'
 import type { ApiPath } from './path.js'
 import type { Page, RequestOptions } from './types/index.js'
@@ -11,6 +17,12 @@ export interface RequestArgs {
   query?: object
   body?: unknown
   idempotencyKey?: string
+  /** Overrides the client's per-attempt timeout. */
+  timeoutMs?: number
+  /** False sends the request exactly once, whatever the method or key. */
+  retry?: boolean
+  /** Cancels the request from the caller's side. */
+  signal?: AbortSignal
 }
 
 /**
@@ -27,7 +39,7 @@ const BASE_RETRY_DELAY_MS = 500
 type AttemptOutcome =
   | { kind: 'ok'; value: unknown }
   | { kind: 'retry'; error: unknown }
-  | { kind: 'fail'; error: MarcaponyError }
+  | { kind: 'fail'; error: unknown }
 
 export class Transport {
   constructor(
@@ -43,7 +55,8 @@ export class Transport {
   async request<T>(args: RequestArgs): Promise<T> {
     const url = this.url(args)
     const init = this.init(args)
-    const retryable = args.method === 'GET' || Boolean(args.idempotencyKey)
+    const retryable =
+      args.retry !== false && (args.method === 'GET' || Boolean(args.idempotencyKey))
     const attempts = retryable ? this.options.maxRetries + 1 : 1
 
     let lastError: unknown = null
@@ -71,10 +84,11 @@ export class Transport {
     return url.toString()
   }
 
-  private init(args: RequestArgs): RequestInit {
+  private init(args: RequestArgs, accept = 'application/json'): RequestInit {
     const headers: Record<string, string> = {
       ...this.extraHeaders,
       Authorization: `Bearer ${this.options.apiKey}`,
+      Accept: accept,
     }
     if (args.body !== undefined) headers['Content-Type'] = 'application/json'
     if (args.idempotencyKey) headers['Idempotency-Key'] = args.idempotencyKey
@@ -91,18 +105,143 @@ export class Transport {
     init: RequestInit,
     args: RequestArgs,
   ): Promise<AttemptOutcome> {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), this.options.timeoutMs)
+    const abort = linkedAbort(args.timeoutMs ?? this.options.timeoutMs, args.signal)
     try {
-      const response = await this.options.fetch(url, { ...init, signal: controller.signal })
+      const response = await this.options.fetch(url, { ...init, signal: abort.signal })
       const body = await readJson(response)
       return classifyResponse(response, body, args)
     } catch (err) {
       if (err instanceof MarcaponyError) return { kind: 'fail', error: err }
+      // The caller gave up: hand back its own reason and do not try again.
+      if (args.signal?.aborted) return { kind: 'fail', error: abortedError(args, args.signal) }
       return { kind: 'retry', error: err }
     } finally {
-      clearTimeout(timer)
+      abort.done()
     }
+  }
+
+  /**
+   * A request answered with server-sent events. Sent exactly once, never
+   * retried: the server may have started (and counted) the work before the
+   * connection failed. `timeoutMs` bounds the whole stream, not only the first
+   * byte. A non-2xx answer throws its `MarcaponyError` before anything is
+   * yielded; each `data:` frame is yielded as parsed JSON.
+   */
+  async *stream(args: RequestArgs): AsyncGenerator<unknown, void, undefined> {
+    const url = this.url(args)
+    const abort = linkedAbort(args.timeoutMs ?? this.options.timeoutMs, args.signal)
+    try {
+      let response: Response
+      try {
+        response = await this.options.fetch(url, {
+          ...this.init(args, 'text/event-stream'),
+          signal: abort.signal,
+        })
+      } catch (err) {
+        throw streamFailure(args, err, abort.signal)
+      }
+      if (!response.ok) {
+        throw errorFromResponse(
+          response.status,
+          (await readJson(response)).value as Parameters<typeof errorFromResponse>[1],
+          response.headers.get('Retry-After'),
+          { method: args.method, path: args.path },
+        )
+      }
+      if (!response.body) {
+        throw new ServerError(
+          response.status,
+          'server_error',
+          `${args.method} ${args.path}: empty stream`,
+        )
+      }
+      const parser = new SseParser()
+      const reader = response.body.getReader()
+      try {
+        for (;;) {
+          const chunk = await reader.read().catch((err: unknown) => {
+            throw streamFailure(args, err, abort.signal)
+          })
+          if (chunk.done) break
+          for (const frame of parser.push(chunk.value)) yield frame
+        }
+        for (const frame of parser.flush()) yield frame
+      } finally {
+        // Ends the connection when the caller stops iterating early.
+        reader.cancel().catch(() => undefined)
+      }
+    } finally {
+      abort.done()
+    }
+  }
+}
+
+/** An abort controller that fires on the timeout or on the caller's signal, whichever comes first. */
+function linkedAbort(timeoutMs: number, outer?: AbortSignal) {
+  const controller = new AbortController()
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('The request timed out', 'TimeoutError')),
+    timeoutMs,
+  )
+  const onAbort = () => controller.abort(outer?.reason)
+  if (outer?.aborted) onAbort()
+  else outer?.addEventListener('abort', onAbort, { once: true })
+  return {
+    signal: controller.signal,
+    done: () => {
+      clearTimeout(timer)
+      outer?.removeEventListener('abort', onAbort)
+    },
+  }
+}
+
+function abortedError(args: RequestArgs, signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException(`${args.method} ${args.path} was aborted`, 'AbortError')
+}
+
+/** What a failed stream throws: the caller's own abort reason, or a ServerError for a timeout or a dropped connection. */
+function streamFailure(args: RequestArgs, err: unknown, signal: AbortSignal): unknown {
+  if (args.signal?.aborted) return abortedError(args, args.signal)
+  const reason = signal.aborted ? 'timed out' : err instanceof Error ? err.message : String(err)
+  return new ServerError(0, 'server_error', `${args.method} ${args.path} stream failed: ${reason}`)
+}
+
+/**
+ * Splits a server-sent event stream into the JSON of its `data:` fields. Only
+ * `data` matters on this surface; comments and other fields are skipped, and
+ * so is a frame whose data is not JSON.
+ */
+export class SseParser {
+  private readonly decoder = new TextDecoder()
+  private buffer = ''
+
+  push(bytes: Uint8Array): unknown[] {
+    this.buffer += this.decoder.decode(bytes, { stream: true })
+    return this.drain(false)
+  }
+
+  flush(): unknown[] {
+    this.buffer += this.decoder.decode()
+    return this.drain(true)
+  }
+
+  private drain(final: boolean): unknown[] {
+    const frames: unknown[] = []
+    const blocks = this.buffer.replace(/\r\n/g, '\n').split('\n\n')
+    this.buffer = final ? '' : (blocks.pop() ?? '')
+    for (const block of blocks) {
+      const data = block
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(line.startsWith('data: ') ? 6 : 5))
+      if (data.length === 0) continue
+      try {
+        frames.push(JSON.parse(data.join('\n')))
+      } catch {
+        // Not JSON: not a frame of this surface.
+      }
+    }
+    return frames
   }
 }
 
@@ -145,6 +284,7 @@ function classifyResponse(
     { method: args.method, path: args.path },
   )
   if (response.status !== 429 && response.status < 500) return { kind: 'fail', error }
+  if (isPermanentPersonaError(error)) return { kind: 'fail', error }
   // Honoring a Retry-After beyond the cap would stall the caller far past its
   // own timeout; hand the decision back instead.
   if (
