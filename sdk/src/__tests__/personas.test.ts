@@ -481,9 +481,17 @@ describe('extendHistory', () => {
     expect(next[29]?.messageId).toBe('id31')
   })
 
-  it('leaves out an answer over 2,000 characters, which a signature cannot shorten', () => {
-    const next = extendHistory([], [entry(0), entry(1, 'x'.repeat(2001))])
-    expect(next.map((e) => e.messageId)).toEqual(['id0'])
+  it('keeps long signed answers up to 32,768 characters', () => {
+    const next = extendHistory([], [entry(0), entry(1, 'x'.repeat(32_768))])
+    expect(next.map((e) => e.messageId)).toEqual(['id0', 'id1'])
+  })
+
+  it('leaves out entries over their limit, which a signature cannot shorten', () => {
+    const next = extendHistory(
+      [],
+      [entry(0, 'x'.repeat(2001)), entry(1, 'x'.repeat(32_769)), entry(2), entry(3)],
+    )
+    expect(next.map((e) => e.messageId)).toEqual(['id2', 'id3'])
   })
 })
 

@@ -20,8 +20,13 @@ import type {
 export const PERSONA_MESSAGE_TIMEOUT_MS = 120_000
 /** The most history entries the API accepts with one message. */
 export const PERSONA_HISTORY_MAX_ENTRIES = 30
-/** The longest history entry the API accepts. */
-export const PERSONA_HISTORY_MAX_CHARS = 2000
+/** The longest visitor message the API accepts, in a message or in the history. */
+export const PERSONA_HISTORY_MAX_USER_CHARS = 2000
+/**
+ * The longest answer any character's history accepts. A character's own limit
+ * follows its answer length and is never below 2,000 characters.
+ */
+export const PERSONA_HISTORY_MAX_ANSWER_CHARS = 32_768
 
 export interface ResumePersonaChatOptions {
   /** The signed entries kept from earlier messages of this conversation. */
@@ -98,15 +103,21 @@ function turnEntries(
 
 /**
  * The history after a turn: within the API's limits, so the next message is
- * accepted. A signed entry cannot be shortened, so an answer over the length
- * limit is left out rather than cut.
+ * accepted. A signed entry cannot be shortened, so an entry over its length
+ * limit is left out rather than cut. Answers the character gave always fit.
  */
 export function extendHistory(
   history: readonly PersonaHistoryEntry[],
   added: readonly PersonaHistoryEntry[],
 ): PersonaHistoryEntry[] {
   return [...history, ...added]
-    .filter((entry) => entry.text.length <= PERSONA_HISTORY_MAX_CHARS)
+    .filter(
+      (entry) =>
+        entry.text.length <=
+        (entry.role === 'assistant'
+          ? PERSONA_HISTORY_MAX_ANSWER_CHARS
+          : PERSONA_HISTORY_MAX_USER_CHARS),
+    )
     .slice(-PERSONA_HISTORY_MAX_ENTRIES)
 }
 

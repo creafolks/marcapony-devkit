@@ -16,7 +16,8 @@ export type { OrdersResource } from './resources/orders.js'
 export type { DiscountsResource, PaymentLinksResource } from './resources/payments.js'
 export type { PostsResource } from './resources/posts.js'
 export {
-  PERSONA_HISTORY_MAX_CHARS,
+  PERSONA_HISTORY_MAX_ANSWER_CHARS,
+  PERSONA_HISTORY_MAX_USER_CHARS,
   PERSONA_HISTORY_MAX_ENTRIES,
   PERSONA_MESSAGE_TIMEOUT_MS,
   type PersonaChat,

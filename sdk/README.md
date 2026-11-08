@@ -215,8 +215,10 @@ far. The API signs every answer and every accepted visitor message, and refuses
 a history with a missing or changed signature (`ValidationError`,
 `invalid_history`), so nobody can put words in the character's mouth. The chat
 keeps the signed entries in `chat.history` and sends them for you: at most 30,
-the oldest dropped first. Store them with the conversation id if you need to
-`resume` later.
+the oldest dropped first. A visitor message may be up to 2,000 characters; an
+answer comes back as long as the character wrote it (up to 32,768 characters)
+and is accepted back in full. Store the entries with the conversation id if you
+need to `resume` later.
 
 ### Errors
 
