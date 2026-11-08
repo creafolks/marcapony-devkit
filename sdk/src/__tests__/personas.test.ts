@@ -246,6 +246,64 @@ describe('chat.send', () => {
   })
 })
 
+describe('a refused history', () => {
+  const refused = () =>
+    jsonResponse({ error: { code: 'invalid_history', message: 'history refused' } }, 422)
+  const NEW_ID = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
+  const restarted = () =>
+    jsonResponse(
+      { data: { conversationId: NEW_ID, channel: 'app', storesTranscripts: false } },
+      201,
+    )
+
+  it('starts a chat from start over in a new conversation and sends the message there', async () => {
+    const { fetch, calls } = makeFetch([started(), reply(), refused(), restarted(), reply()])
+    const chat = await client(fetch).personas.start('barista', {
+      endUser: 'p1',
+      requireVerification: true,
+      idempotencyKey: 'start-1',
+    })
+    await chat.send('first')
+    expect(chat.history).toHaveLength(2)
+    const answer = await chat.send('second')
+    expect(answer.text).toBe('An espresso.')
+    expect(chat.id).toBe(NEW_ID)
+    expect(calls[3]?.url).toBe(`${BASE}/personas/barista/conversations`)
+    expect(calls[3]?.body).toEqual({ endUser: 'p1', requireVerification: true })
+    expect(headers(calls[3])['Idempotency-Key']).toBeUndefined()
+    expect(calls[4]?.url).toBe(`${BASE}/personas/barista/conversations/${NEW_ID}/messages`)
+    expect(calls[4]?.body).toEqual({ text: 'second', endUser: 'p1', history: [] })
+    expect(chat.history.map((entry) => entry.text)).toEqual(['second', 'An espresso.'])
+  })
+
+  it('does the same before a stream opens', async () => {
+    const { fetch, calls } = makeFetch([
+      started(),
+      refused(),
+      restarted(),
+      sseResponse([
+        frame({ type: 'message_start', messageId: 'a1' }) +
+          frame({ type: 'text', content: 'Hello' }) +
+          frame({ type: 'done', messageId: 'a1', turn: 1, signature: 'sig-a1' }),
+      ]),
+    ])
+    const chat = await client(fetch).personas.start('barista')
+    const events = await collect(chat.stream('Hi'))
+    expect(events.map((event) => event.type)).toEqual(['message_start', 'text', 'done'])
+    expect(chat.id).toBe(NEW_ID)
+    expect(calls).toHaveLength(4)
+  })
+
+  it('is thrown by a resumed chat, which cannot know how it was started', async () => {
+    const { fetch, calls } = makeFetch([refused()])
+    const chat = client(fetch).personas.resume('barista', CONVERSATION)
+    const err = await chat.send('x').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ValidationError)
+    expect((err as { code: string }).code).toBe('invalid_history')
+    expect(calls).toHaveLength(1)
+  })
+})
+
 describe('cap errors', () => {
   it('are never retried, even where a request would be', async () => {
     const { fetch, calls } = makeFetch([

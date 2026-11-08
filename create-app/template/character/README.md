@@ -41,7 +41,9 @@ The `/api/chat/*` routes are `personasHandler` from `marcapony-sdk`. It gives
 every visitor an anonymous id in the `mp_eu` cookie (HttpOnly, Secure, one
 year), so the per-visitor limits apply, and it stores nothing: the browser
 keeps the conversation's signed history in `sessionStorage` and sends it with
-each message, so a new tab starts a new conversation.
+each message, so a new tab starts a new conversation. When Marcapony no longer
+accepts the saved history, the page starts a new conversation and sends the
+message there.
 
 ## What to change first
 

@@ -1,4 +1,4 @@
-import { errorFromResponse, PERSONA_LIMIT_CODES, ServerError } from '../errors.js'
+import { errorFromResponse, PERSONA_LIMIT_CODES, ServerError, ValidationError } from '../errors.js'
 import { path, type ApiPath } from '../path.js'
 import { create, get, unwrap, type Transport } from '../transport.js'
 import type {
@@ -45,7 +45,11 @@ export interface ResumePersonaChatOptions {
  * `send` or `stream` while one is running throws.
  */
 export interface PersonaChat {
-  /** The conversation id. Store it to `resume` the conversation later. */
+  /**
+   * The conversation id. Store it to `resume` the conversation later. It
+   * changes when a chat from `start` has to begin a new conversation (see
+   * `send`), so read it again after each message.
+   */
   readonly id: string
   readonly slug: string
   /** True when Marcapony keeps the transcript; null when not known (after `resume` without it). */
@@ -59,12 +63,18 @@ export interface PersonaChat {
    * extended after every answer: at most 30, the oldest dropped first.
    */
   readonly history: readonly PersonaHistoryEntry[]
-  /** Sends a message and waits for the whole answer. Never retried. */
+  /**
+   * Sends a message and waits for the whole answer. Never retried, with one
+   * exception: when the API no longer accepts the conversation's history
+   * (`invalid_history`), a chat from `start` begins a new conversation with
+   * the same options and sends the message there once. A chat from `resume`
+   * throws `ValidationError` instead; start a new conversation yourself.
+   */
   send(text: string, options?: PersonaTurnOptions): Promise<PersonaReply>
   /**
-   * Sends a message and yields the answer as it is written. Never retried.
-   * The history is extended once `done` arrives; stopping early leaves it as
-   * it was.
+   * Sends a message and yields the answer as it is written. Never retried,
+   * apart from the new conversation `send` describes. The history is extended
+   * once `done` arrives; stopping early leaves it as it was.
    */
   stream(text: string, options?: PersonaTurnOptions): AsyncIterable<PersonaEvent>
   /** Reports an answer as unsafe, wrong or otherwise bad. */
@@ -146,22 +156,46 @@ function statusOfStreamError(code: string): number {
   return 500
 }
 
+/** What a chat from `start` needs to begin a new conversation with the same options. */
+type Restart = (() => Promise<PersonaConversation>) | null
+
+function isInvalidHistory(err: unknown): boolean {
+  return err instanceof ValidationError && err.code === 'invalid_history'
+}
+
 class Chat implements PersonaChat {
   private entries: PersonaHistoryEntry[]
   private busy = false
+  private conversationId: string
+  private keepsTranscripts: boolean | null
+  private inTestMode: boolean
 
   constructor(
     private readonly t: Transport,
     readonly slug: string,
-    readonly id: string,
-    readonly storesTranscripts: boolean | null,
-    readonly testMode: boolean,
+    started: { id: string; storesTranscripts: boolean | null; testMode: boolean },
     history: readonly PersonaHistoryEntry[],
     readonly endUser: string | null,
+    private readonly restart: Restart,
   ) {
     // Validated before any request: an empty or dotted id would reach another route.
-    messagesPath(slug, id)
+    messagesPath(slug, started.id)
+    this.conversationId = started.id
+    this.keepsTranscripts = started.storesTranscripts
+    this.inTestMode = started.testMode
     this.entries = [...history]
+  }
+
+  get id(): string {
+    return this.conversationId
+  }
+
+  get storesTranscripts(): boolean | null {
+    return this.keepsTranscripts
+  }
+
+  get testMode(): boolean {
+    return this.inTestMode
   }
 
   get history(): readonly PersonaHistoryEntry[] {
@@ -188,19 +222,42 @@ class Chat implements PersonaChat {
     this.busy = true
   }
 
+  /**
+   * Begins a new conversation after the API refused this one's history, when
+   * the chat knows how. The refusal comes before the turn runs, so nothing
+   * was answered or charged and sending the message again is safe.
+   */
+  private async startOver(err: unknown): Promise<void> {
+    if (!this.restart || !isInvalidHistory(err)) throw err
+    const started = await this.restart()
+    this.conversationId = started.conversationId
+    this.keepsTranscripts = started.storesTranscripts
+    this.inTestMode = started.testMode === true
+    this.entries = []
+  }
+
+  private postMessage(text: string, options?: PersonaTurnOptions) {
+    return this.t.request<{ data: PersonaMessageResult }>({
+      method: 'POST',
+      path: messagesPath(this.slug, this.id),
+      body: this.body(text),
+      timeoutMs: PERSONA_MESSAGE_TIMEOUT_MS,
+      retry: false,
+      signal: options?.signal,
+    })
+  }
+
   async send(text: string, options?: PersonaTurnOptions): Promise<PersonaReply> {
     this.claim()
     try {
-      const result = unwrap(
-        await this.t.request<{ data: PersonaMessageResult }>({
-          method: 'POST',
-          path: messagesPath(this.slug, this.id),
-          body: this.body(text),
-          timeoutMs: PERSONA_MESSAGE_TIMEOUT_MS,
-          retry: false,
-          signal: options?.signal,
-        }),
-      )
+      let envelope: { data: PersonaMessageResult }
+      try {
+        envelope = await this.postMessage(text, options)
+      } catch (err) {
+        await this.startOver(err)
+        envelope = await this.postMessage(text, options)
+      }
+      const result = unwrap(envelope)
       this.entries = extendHistory(this.entries, turnEntries(text, result))
       return {
         messageId: result.messageId,
@@ -219,49 +276,67 @@ class Chat implements PersonaChat {
 
   private async *run(text: string, options?: PersonaTurnOptions): AsyncGenerator<PersonaEvent> {
     this.claim()
-    const route = messagesPath(this.slug, this.id)
     try {
-      // The text of each message, by id, as the server signs it.
-      const texts = new Map<string, string>()
-      let current: string | null = null
-      for await (const frame of this.t.stream({
-        method: 'POST',
-        path: route,
-        body: this.body(text),
-        timeoutMs: PERSONA_MESSAGE_TIMEOUT_MS,
-        signal: options?.signal,
-      })) {
-        if (!isEvent(frame)) continue
-        if (frame.type === 'error') {
-          const code = typeof frame.code === 'string' ? frame.code : 'server_error'
-          const message = typeof frame.error === 'string' ? frame.error : 'The answer failed'
-          throw errorFromResponse(statusOfStreamError(code), { error: { code, message } }, null, {
-            method: 'POST',
-            path: route,
-          })
-        }
-        const event = frame as unknown as PersonaEvent
-        if (event.type === 'message_start') {
-          current = event.messageId
-          texts.set(current, '')
-        } else if (event.type === 'text' && current !== null) {
-          texts.set(current, (texts.get(current) ?? '') + event.content)
-        } else if (event.type === 'done') {
-          const answer = texts.get(event.messageId) ?? ''
-          this.entries = extendHistory(this.entries, turnEntries(text, { ...event, text: answer }))
-          yield event
+      for (let attempt = 0; ; attempt++) {
+        let started = false
+        try {
+          for await (const event of this.turn(text, options)) {
+            started = true
+            yield event
+          }
           return
+        } catch (err) {
+          // Only a refusal before the first event can be sent again.
+          if (started || attempt > 0) throw err
+          await this.startOver(err)
         }
-        yield event
       }
-      throw new ServerError(
-        0,
-        'server_error',
-        `POST ${route}: the stream ended before the answer was complete`,
-      )
     } finally {
       this.busy = false
     }
+  }
+
+  /** One streamed turn of the current conversation. */
+  private async *turn(text: string, options?: PersonaTurnOptions): AsyncGenerator<PersonaEvent> {
+    const route = messagesPath(this.slug, this.id)
+    // The text of each message, by id, as the server signs it.
+    const texts = new Map<string, string>()
+    let current: string | null = null
+    for await (const frame of this.t.stream({
+      method: 'POST',
+      path: route,
+      body: this.body(text),
+      timeoutMs: PERSONA_MESSAGE_TIMEOUT_MS,
+      signal: options?.signal,
+    })) {
+      if (!isEvent(frame)) continue
+      if (frame.type === 'error') {
+        const code = typeof frame.code === 'string' ? frame.code : 'server_error'
+        const message = typeof frame.error === 'string' ? frame.error : 'The answer failed'
+        throw errorFromResponse(statusOfStreamError(code), { error: { code, message } }, null, {
+          method: 'POST',
+          path: route,
+        })
+      }
+      const event = frame as unknown as PersonaEvent
+      if (event.type === 'message_start') {
+        current = event.messageId
+        texts.set(current, '')
+      } else if (event.type === 'text' && current !== null) {
+        texts.set(current, (texts.get(current) ?? '') + event.content)
+      } else if (event.type === 'done') {
+        const answer = texts.get(event.messageId) ?? ''
+        this.entries = extendHistory(this.entries, turnEntries(text, { ...event, text: answer }))
+        yield event
+        return
+      }
+      yield event
+    }
+    throw new ServerError(
+      0,
+      'server_error',
+      `POST ${route}: the stream ended before the answer was complete`,
+    )
   }
 
   async report(
@@ -297,20 +372,22 @@ export function personasResource(transport: Transport) {
     /** Starts a conversation. */
     start: async (slug: string, options: StartPersonaChatOptions = {}): Promise<PersonaChat> => {
       const { idempotencyKey, ...input } = options
-      const started = await create<PersonaConversation>(
-        transport,
-        path`/personas/${slug}/conversations`,
-        input,
-        { idempotencyKey },
-      )
+      const route = path`/personas/${slug}/conversations`
+      const started = await create<PersonaConversation>(transport, route, input, {
+        idempotencyKey,
+      })
       return new Chat(
         transport,
         slug,
-        started.conversationId,
-        started.storesTranscripts,
-        started.testMode === true,
+        {
+          id: started.conversationId,
+          storesTranscripts: started.storesTranscripts,
+          testMode: started.testMode === true,
+        },
         [],
         input.endUser ?? null,
+        // A new conversation is a new start: the first key would replay the old one.
+        () => create<PersonaConversation>(transport, route, input),
       )
     },
     /** Continues a conversation the app stored. Makes no request. */
@@ -322,11 +399,14 @@ export function personasResource(transport: Transport) {
       new Chat(
         transport,
         slug,
-        conversationId,
-        options.storesTranscripts ?? null,
-        false,
+        {
+          id: conversationId,
+          storesTranscripts: options.storesTranscripts ?? null,
+          testMode: false,
+        },
         options.history ?? [],
         options.endUser ?? null,
+        null,
       ),
   }
 }

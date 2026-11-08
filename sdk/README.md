@@ -220,7 +220,11 @@ a history with a missing or changed signature (`ValidationError`,
 keeps the signed entries in `chat.history` and sends them for you: at most 30,
 the oldest dropped first. A visitor message may be up to 2,000 characters; an
 answer comes back as long as the character wrote it (up to 32,768 characters)
-and is accepted back in full. Store the entries with the conversation id if you
+and is accepted back in full. Once a conversation has answered, every message
+must carry at least one signed answer. When the history is refused anyway, a
+chat from `start` begins a new conversation with the same options and sends the
+message there (`chat.id` changes, so store it again); a chat from `resume`
+throws `ValidationError` with `invalid_history`, and you start a new one. Store the entries with the conversation id if you
 need to `resume` later.
 
 ### Errors

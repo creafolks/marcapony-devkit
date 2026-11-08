@@ -136,8 +136,9 @@ export function App() {
 
   const base = character ? `/api/chat/${encodeURIComponent(character.slug)}` : ''
 
-  async function conversationId(): Promise<string> {
-    if (saved.conversationId) return saved.conversationId
+  /** The saved conversation, or a new one when there is none or `fresh` is set. */
+  async function conversationId(fresh = false): Promise<string> {
+    if (saved.conversationId && !fresh) return saved.conversationId
     // No locale: the character answers in the account's default language, the
     // same one /api/character shows. A locale the site does not serve is refused.
     const started = await api<{ conversationId: string }>(`${base}/conversations`, { body: {} })
@@ -146,11 +147,16 @@ export function App() {
   }
 
   /** Sends one message and reads the streamed answer. */
-  async function stream(id: string, text: string, token?: string): Promise<void> {
+  async function stream(
+    id: string,
+    text: string,
+    history: HistoryEntry[],
+    token?: string,
+  ): Promise<void> {
     const response = await fetch(`${base}/conversations/${id}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ text, history: saved.history, turnstileToken: token }),
+      body: JSON.stringify({ text, history, turnstileToken: token }),
     })
     if (!response.ok || !response.body) {
       const body = (await response.json().catch(() => ({}))) as {
@@ -214,10 +220,10 @@ export function App() {
       ...previous,
       lines: [...previous.lines, { role: 'user', text: trimmed }],
     }))
-    try {
-      const id = await conversationId()
+    /** One message to one conversation, with the visitor check when it is due. */
+    async function attempt(id: string, history: HistoryEntry[]): Promise<void> {
       try {
-        await stream(id, trimmed)
+        await stream(id, trimmed, history)
       } catch (err) {
         // A visitor check is due: show the widget, then send once more with its token.
         if (!(err instanceof ChatError && err.code === 'verification_required')) throw err
@@ -226,7 +232,19 @@ export function App() {
         const token = await turnstileToken(err.turnstileSiteKey, widget.current).finally(() =>
           setChecking(false),
         )
-        await stream(id, trimmed, token)
+        await stream(id, trimmed, history, token)
+      }
+    }
+
+    try {
+      try {
+        await attempt(await conversationId(), saved.history)
+      } catch (err) {
+        if (!(err instanceof ChatError && err.code === 'invalid_history')) throw err
+        // The saved history no longer fits this conversation (a lost tab, an
+        // older page): start a new conversation and send the message there.
+        setSaved((previous) => ({ ...previous, conversationId: null, history: [] }))
+        await attempt(await conversationId(true), [])
       }
     } catch (err) {
       if (err instanceof ChatError && CONVERSATION_ENDED.has(err.code)) {
