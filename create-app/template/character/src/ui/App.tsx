@@ -129,9 +129,9 @@ export function App() {
 
   async function conversationId(): Promise<string> {
     if (saved.conversationId) return saved.conversationId
-    const started = await api<{ conversationId: string }>(`${base}/conversations`, {
-      body: { locale: navigator.language.slice(0, 2) },
-    })
+    // No locale: the character answers in the account's default language, the
+    // same one /api/character shows. A locale the site does not serve is refused.
+    const started = await api<{ conversationId: string }>(`${base}/conversations`, { body: {} })
     setSaved((previous) => ({ ...previous, conversationId: started.conversationId }))
     return started.conversationId
   }
