@@ -23,6 +23,12 @@ export {
   type PersonasResource,
   type ResumePersonaChatOptions,
 } from './resources/personas.js'
+export {
+  personasHandler,
+  END_USER_COOKIE,
+  type PersonasHandlerOptions,
+  type TurnstileOptions,
+} from './personas-handler.js'
 export type { AvailabilityBlocksResource, ReservationsResource } from './resources/reservations.js'
 export type { RegionsResource, SiteResource } from './resources/site.js'
 export * from './errors.js'
