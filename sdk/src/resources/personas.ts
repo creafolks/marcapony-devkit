@@ -33,6 +33,11 @@ export interface ResumePersonaChatOptions {
   history?: readonly PersonaHistoryEntry[]
   /** Whether Marcapony keeps the transcript, as `start` reported it. When true, no history is sent. */
   storesTranscripts?: boolean
+  /**
+   * The `endUser` the conversation was started with. A conversation started
+   * with one answers `NotFoundError` to every call that does not carry it.
+   */
+  endUser?: string
 }
 
 /**
@@ -47,6 +52,8 @@ export interface PersonaChat {
   readonly storesTranscripts: boolean | null
   /** True while the app is in test mode, as `start` reported it. */
   readonly testMode: boolean
+  /** The `endUser` the conversation belongs to; every call of the chat sends it. */
+  readonly endUser: string | null
   /**
    * The signed entries sent with each message when the transcript is not kept,
    * extended after every answer: at most 30, the oldest dropped first.
@@ -150,6 +157,7 @@ class Chat implements PersonaChat {
     readonly storesTranscripts: boolean | null,
     readonly testMode: boolean,
     history: readonly PersonaHistoryEntry[],
+    readonly endUser: string | null,
   ) {
     // Validated before any request: an empty or dotted id would reach another route.
     messagesPath(slug, id)
@@ -160,8 +168,15 @@ class Chat implements PersonaChat {
     return this.entries
   }
 
-  private body(text: string): { text: string; history?: PersonaHistoryEntry[] } {
-    return this.storesTranscripts === true ? { text } : { text, history: this.entries }
+  /** The conversation's owner, which every call must name once it was started with one. */
+  private owner(): { endUser?: string } {
+    return this.endUser ? { endUser: this.endUser } : {}
+  }
+
+  private body(text: string): { text: string; endUser?: string; history?: PersonaHistoryEntry[] } {
+    return this.storesTranscripts === true
+      ? { text, ...this.owner() }
+      : { text, ...this.owner(), history: this.entries }
   }
 
   private claim(): void {
@@ -255,6 +270,7 @@ class Chat implements PersonaChat {
     options?: { note?: string },
   ): Promise<void> {
     await create(this.t, path`/personas/${this.slug}/conversations/${this.id}/reports`, {
+      ...this.owner(),
       messageId,
       reason,
       ...(options?.note ? { note: options.note } : {}),
@@ -262,11 +278,11 @@ class Chat implements PersonaChat {
   }
 
   async verify(): Promise<void> {
-    await create(this.t, path`/personas/${this.slug}/conversations/${this.id}/verify`)
+    await create(this.t, path`/personas/${this.slug}/conversations/${this.id}/verify`, this.owner())
   }
 
   transcript(): Promise<PersonaMessage[]> {
-    return get(this.t, messagesPath(this.slug, this.id))
+    return get(this.t, messagesPath(this.slug, this.id), this.owner())
   }
 }
 
@@ -294,6 +310,7 @@ export function personasResource(transport: Transport) {
         started.storesTranscripts,
         started.testMode === true,
         [],
+        input.endUser ?? null,
       )
     },
     /** Continues a conversation the app stored. Makes no request. */
@@ -309,6 +326,7 @@ export function personasResource(transport: Transport) {
         options.storesTranscripts ?? null,
         false,
         options.history ?? [],
+        options.endUser ?? null,
       ),
   }
 }

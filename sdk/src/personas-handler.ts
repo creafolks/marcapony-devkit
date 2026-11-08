@@ -256,18 +256,30 @@ export function personasHandler(
     }
   }
 
+  /**
+   * Who the visitor is: the app's own id, or the one in a valid cookie. A
+   * conversation belongs to the visitor who started it, and every later call
+   * must name the same one, or Marcapony answers 404.
+   */
+  async function knownEndUser(request: Request): Promise<string | null> {
+    const own = await options.endUser?.(request)
+    if (typeof own === 'string' && own.length > 0) return own
+    return cookies.read(request)
+  }
+
+  async function owned(request: Request): Promise<{ endUser?: string }> {
+    const endUser = await knownEndUser(request)
+    return endUser ? { endUser } : {}
+  }
+
   async function start(request: Request, slug: string): Promise<Response> {
     const body = (await readBody(request)) ?? {}
-    const own = await options.endUser?.(request)
-    let endUser = typeof own === 'string' && own.length > 0 ? own : null
+    let endUser = await knownEndUser(request)
     let setCookie: string | null = null
     if (endUser === null) {
-      endUser = await cookies.read(request)
-      if (endUser === null) {
-        const issued = await cookies.issue()
-        endUser = issued.id
-        setCookie = issued.setCookie
-      }
+      const issued = await cookies.issue()
+      endUser = issued.id
+      setCookie = issued.setCookie
     }
     const ip = clientIp(request)
     const chat = await mp.personas.start(slug, {
@@ -300,7 +312,7 @@ export function personasHandler(
     }
     // The browser's history goes to Marcapony untouched; it checks every signature.
     const history = Array.isArray(body?.history) ? (body.history as PersonaHistoryEntry[]) : []
-    const chat = mp.personas.resume(slug, id, { history })
+    const chat = mp.personas.resume(slug, id, { history, ...(await owned(request)) })
     const token = body?.turnstileToken
 
     if (!(request.headers.get('Accept') ?? '').includes('text/event-stream')) {
@@ -371,7 +383,7 @@ export function personasHandler(
     }
     const note = typeof body?.note === 'string' ? body.note.slice(0, 500) : undefined
     await mp.personas
-      .resume(slug, id)
+      .resume(slug, id, await owned(request))
       .report(messageId, reason as PersonaReportReason, note ? { note } : undefined)
     return json({ reported: true }, 201)
   }
@@ -381,7 +393,7 @@ export function personasHandler(
     if (!(await passesTurnstile(body?.token, request))) {
       return verificationNeeded('The check did not pass; try again')
     }
-    await mp.personas.resume(slug, id).verify()
+    await mp.personas.resume(slug, id, await owned(request)).verify()
     return json({ verified: true })
   }
 

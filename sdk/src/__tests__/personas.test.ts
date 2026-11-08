@@ -456,6 +456,34 @@ describe('the other chat calls', () => {
     expect(calls[0]?.body).toEqual({ messageId: 'a1', reason: 'wrong', note: 'not on the menu' })
   })
 
+  it('name the end user the conversation was started with on every call', async () => {
+    const { fetch, calls } = makeFetch([
+      started(),
+      reply(),
+      jsonResponse({ data: { reported: true } }, 201),
+      jsonResponse({ data: { verified: true, turn: 1 } }),
+      jsonResponse({ data: [] }),
+    ])
+    const chat = await client(fetch).personas.start('barista', { endUser: 'player 1' })
+    expect(chat.endUser).toBe('player 1')
+    await chat.send('Hi')
+    await chat.report('a1', 'other')
+    await chat.verify()
+    await chat.transcript()
+    expect((calls[1]!.body as { endUser: string }).endUser).toBe('player 1')
+    expect((calls[2]!.body as { endUser: string }).endUser).toBe('player 1')
+    expect(calls[3]?.body).toEqual({ endUser: 'player 1' })
+    expect(calls[4]?.url).toBe(
+      `${BASE}/personas/barista/conversations/${CONVERSATION}/messages?endUser=player+1`,
+    )
+  })
+
+  it('send no end user for a conversation started without one', async () => {
+    const { fetch, calls } = makeFetch([reply()])
+    await client(fetch).personas.resume('barista', CONVERSATION).send('Hi')
+    expect(calls[0]?.body).toEqual({ text: 'Hi', history: [] })
+  })
+
   it('resume makes no request and refuses an id that would leave its path segment', () => {
     const { fetch, calls } = makeFetch([])
     const mp = client(fetch)

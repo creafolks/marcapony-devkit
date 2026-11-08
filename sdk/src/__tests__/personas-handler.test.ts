@@ -220,6 +220,23 @@ describe('messages', () => {
     { role: 'assistant', text: 'Hello!', messageId: 'a0', signature: 'sig-a0' },
   ]
 
+  it('names the visitor of the cookie on every call of a conversation', async () => {
+    const { handler, calls } = setup([
+      started,
+      reply,
+      () => jsonResponse({ data: { reported: true } }, 201),
+    ])
+    const first = await handler(post(`${APP}/api/chat/barista/conversations`, {}))
+    const cookie = `${END_USER_COOKIE}=${cookieValue(first)}`
+    const id = cookieValue(first).split('.')[0]
+    await handler(post(`${ROUTE}/messages`, { text: 'Hi' }, { Cookie: cookie }))
+    await handler(
+      post(`${ROUTE}/reports`, { messageId: 'a1', reason: 'wrong' }, { Cookie: cookie }),
+    )
+    expect((calls[1]!.body as { endUser: string }).endUser).toBe(id!)
+    expect((calls[2]!.body as { endUser: string }).endUser).toBe(id!)
+  })
+
   it('forwards the browser history untouched and returns the signed list', async () => {
     const { handler, calls } = setup([reply])
     const response = await handler(post(`${ROUTE}/messages`, { text: 'Coffee?', history }))

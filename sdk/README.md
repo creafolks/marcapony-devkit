@@ -180,7 +180,7 @@ const reply = await chat.send('And a dessert?') // waits for the whole answer
 | ---------------------------------------- | --------------------------------------------------------------- |
 | `personas.list()`, `personas.get(slug)`  | The granted characters: name, description, avatar, greeting, starter questions, `available` |
 | `personas.start(slug, options)`          | Starts a conversation and returns a chat                        |
-| `personas.resume(slug, id, { history })` | A chat for a conversation you stored; makes no request          |
+| `personas.resume(slug, id, { history, endUser })` | A chat for a conversation you stored; makes no request          |
 | `chat.send(text)`                        | Sends a message and resolves to `{ messageId, text, turn, testMode }` |
 | `chat.stream(text)`                      | The same message, as events while the answer is written         |
 | `chat.report(messageId, reason)`         | Reports an answer as `'unsafe'`, `'wrong'` or `'other'`         |
@@ -194,6 +194,9 @@ const reply = await chat.send('And a dessert?') // waits for the whole answer
   address). Marcapony stores only a keyed hash of it and uses it for the
   per-player limits. Pass `endUserIp` too, so the limit on new players per
   address applies.
+- A conversation started with `endUser` belongs to that player: every later
+  call must name the same id, or it answers `NotFoundError`. The chat sends it
+  for you (`chat.endUser`); pass it to `resume` as `{ endUser }` as well.
 - A stream yields `message_start` (the id of the answer), `text`, `tool_call`
   and `tool_result` (the character looked something up), `retract` and `done`.
   `retract` withdraws the message with that id: remove what you showed of it.
