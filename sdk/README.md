@@ -207,7 +207,8 @@ const reply = await chat.send('And a dessert?') // waits for the whole answer
   `PersonaUnavailableError`, `ServerError` (`service_unavailable` or
   `server_error`) instead.
 - A message is never retried, so a dropped connection can never be charged
-  twice; send it again yourself if you want to. A message may take up to 120
+  twice; send it again yourself if you want to. The one exception is a refused
+  history (see History), which the API refuses before the turn runs. A message may take up to 120
   seconds, whatever `timeoutMs` is set to. Send one message of a chat at a time.
 
 ### History
@@ -218,14 +219,15 @@ far. The API signs every answer and every accepted visitor message, and refuses
 a history with a missing or changed signature (`ValidationError`,
 `invalid_history`), so nobody can put words in the character's mouth. The chat
 keeps the signed entries in `chat.history` and sends them for you: at most 30,
-the oldest dropped first. A visitor message may be up to 2,000 characters; an
-answer comes back as long as the character wrote it (up to 32,768 characters)
-and is accepted back in full. Once a conversation has answered, every message
+the oldest dropped first. A visitor message may be up to 2,000 characters
+(`PERSONA_HISTORY_MAX_USER_CHARS`); an answer comes back as long as the
+character wrote it, up to 32,768 characters
+(`PERSONA_HISTORY_MAX_ANSWER_CHARS`), and is accepted back in full. Once a conversation has answered, every message
 must carry at least one signed answer. When the history is refused anyway, a
 chat from `start` begins a new conversation with the same options and sends the
 message there (`chat.id` changes, so store it again); a chat from `resume`
-throws `ValidationError` with `invalid_history`, and you start a new one. Store the entries with the conversation id if you
-need to `resume` later.
+throws `ValidationError` with `invalid_history`, and you start a new one.
+Store the entries with the conversation id if you need to `resume` later.
 
 ### Errors
 
@@ -237,11 +239,13 @@ need to `resume` later.
 | `RateLimitError`             | `rate_limited`: too many messages from one player, or too many new players from one address |
 
 A game can show "the shopkeeper is resting" for the first two instead of
-failing. A `RateLimitError` carries `retryAfter`, the seconds to wait. A start
-with an `idempotencyKey` waits that long and tries again by itself when it is
-60 seconds or less; a message is never sent again, so wait and send it
-yourself. `personasHandler` passes the wait on as a `Retry-After` header. No request is ever retried on them. An `error` event in a stream is
+failing. No request is ever retried on them. An `error` event in a stream is
 thrown by the iterator as the same classes.
+
+A `RateLimitError` carries `retryAfter`, the seconds to wait. A start with an
+`idempotencyKey` waits that long and tries again by itself when it is 60
+seconds or less; a message is never sent again, so wait and send it yourself.
+`personasHandler` passes the wait on to the browser as a `Retry-After` header.
 
 ### Test mode
 
