@@ -198,6 +198,11 @@ const reply = await chat.send('And a dessert?') // waits for the whole answer
   and `tool_result` (the character looked something up), `retract` and `done`.
   `retract` withdraws the message with that id: remove what you showed of it.
   A new `message_start` follows with the replacement.
+- A turn that fails ends with an `error` event and no `done`: the iterator
+  throws, and nothing of the turn is kept in the history. Remove the text you
+  showed of it. `send` never resolves to a partial answer; it throws
+  `PersonaUnavailableError`, `ServerError` (`service_unavailable` or
+  `server_error`) instead.
 - A message is never retried, so a dropped connection can never be charged
   twice; send it again yourself if you want to. A message may take up to 120
   seconds, whatever `timeoutMs` is set to. Send one message of a chat at a time.

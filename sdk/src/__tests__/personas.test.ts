@@ -362,6 +362,29 @@ describe('chat.stream', () => {
     expect(chat.history).toEqual([])
   })
 
+  it('keeps nothing of a turn that failed after some text', async () => {
+    const { fetch } = makeFetch([
+      sseResponse([
+        frame({ type: 'message_start', messageId: 'a1' }) +
+          frame({ type: 'text', content: 'Half an ans' }) +
+          frame({ type: 'error', code: 'server_error', error: 'Something went wrong' }) +
+          // Never sent after an error; ignored even if it were.
+          frame({ type: 'done', messageId: 'a1', turn: 1, signature: 'sig-a1' }),
+      ]),
+      jsonResponse({ error: { code: 'server_error', message: 'No answer' } }, 500),
+    ])
+    const chat = client(fetch).personas.resume('barista', CONVERSATION)
+    const seen: string[] = []
+    const err = await (async () => {
+      for await (const event of chat.stream('x')) seen.push(event.type)
+    })().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ServerError)
+    expect(seen).toEqual(['message_start', 'text'])
+    expect(chat.history).toEqual([])
+    expect(await chat.send('y').catch((e: unknown) => e)).toBeInstanceOf(ServerError)
+    expect(chat.history).toEqual([])
+  })
+
   it('throws a refusal before the stream as its typed error, once', async () => {
     const { fetch, calls } = makeFetch([
       jsonResponse({ error: { code: 'conversation_limit_reached', message: 'enough' } }, 429),
