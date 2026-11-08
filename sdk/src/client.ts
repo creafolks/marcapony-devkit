@@ -27,6 +27,7 @@ import {
   type DiscountsResource,
   type PaymentLinksResource,
 } from './resources/payments.js'
+import { personasResource, type PersonasResource } from './resources/personas.js'
 import { postsResource, type PostsResource } from './resources/posts.js'
 import {
   availabilityBlocksResource,
@@ -78,6 +79,11 @@ export interface MarcaponyClient {
   blogAuthors: BlogAuthorsResource
   blogCategories: BlogCategoriesResource
   media: MediaResource
+  /**
+   * Conversations with the account's characters. Not on `forRequest()`: these
+   * calls never act as a signed-in person. Needs the `personas:chat` scope.
+   */
+  personas: PersonasResource
 }
 
 /** Creates a client for the external API. Use it from server code only. */
@@ -129,6 +135,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     blogAuthors: blogAuthorsResource(t),
     blogCategories: blogCategoriesResource(t),
     media: mediaResource(t),
+    personas: personasResource(t),
   }
 }
 

@@ -15,6 +15,14 @@ export type { MediaResource } from './resources/media.js'
 export type { OrdersResource } from './resources/orders.js'
 export type { DiscountsResource, PaymentLinksResource } from './resources/payments.js'
 export type { PostsResource } from './resources/posts.js'
+export {
+  PERSONA_HISTORY_MAX_CHARS,
+  PERSONA_HISTORY_MAX_ENTRIES,
+  PERSONA_MESSAGE_TIMEOUT_MS,
+  type PersonaChat,
+  type PersonasResource,
+  type ResumePersonaChatOptions,
+} from './resources/personas.js'
 export type { AvailabilityBlocksResource, ReservationsResource } from './resources/reservations.js'
 export type { RegionsResource, SiteResource } from './resources/site.js'
 export * from './errors.js'
