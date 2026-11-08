@@ -19,7 +19,9 @@ minor release may contain breaking changes; each one is listed below.
 - `personasHandler(mp, options)`: a request handler for the app's own chat
   route. It keeps an anonymous visitor id in a signed `mp_eu` cookie (signed
   with `MARCAPONY_APP_SECRET`), forwards messages and history, streams answers
-  through, and supports an optional Turnstile check.
+  through, and supports an optional Turnstile check. `clientIp` sets where the
+  visitor's address comes from; the default, `cf-connecting-ip`, is only
+  trustworthy on Cloudflare.
 - Error classes `PersonaUnavailableError`, `PersonaLimitError` and
   `VerificationRequiredError`, and the `PERSONA_LIMIT_CODES` list.
   `invalid_history` maps to `ValidationError` and `service_unavailable` to

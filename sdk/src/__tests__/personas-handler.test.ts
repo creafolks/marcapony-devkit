@@ -171,6 +171,21 @@ describe('the visitor cookie', () => {
     expect((calls[2]!.body as { endUser: string }).endUser).not.toBe(id!)
   })
 
+  it('takes the visitor address from clientIp when given', async () => {
+    const { handler, calls } = setup([started], { clientIp: (r) => r.headers.get('x-real-ip') })
+    await handler(
+      post(
+        `${APP}/api/chat/barista/conversations`,
+        {},
+        {
+          'cf-connecting-ip': '198.51.100.1',
+          'x-real-ip': '203.0.113.7',
+        },
+      ),
+    )
+    expect((calls[0]!.body as { endUserIp: string }).endUserIp).toBe('203.0.113.7')
+  })
+
   it('gives way to the app’s own end-user id', async () => {
     const { handler, calls } = setup([started], { endUser: () => 'member-42' })
     const response = await handler(post(`${APP}/api/chat/barista/conversations`, {}))

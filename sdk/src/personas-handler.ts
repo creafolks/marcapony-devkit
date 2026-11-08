@@ -46,6 +46,13 @@ export interface PersonasHandlerOptions {
    * after every 10 messages, with your own widget.
    */
   turnstile?: TurnstileOptions
+  /**
+   * The visitor's IP address, for the limit on new visitors per address and
+   * the Turnstile check. The default reads `cf-connecting-ip`, which only
+   * Cloudflare sets in a way the browser cannot forge. On any other host, or
+   * behind another proxy, return the address from a source you trust, or null.
+   */
+  clientIp?: (request: Request) => string | null | undefined
   /** Custom fetch for the Turnstile check (tests). Defaults to globalThis.fetch. */
   fetch?: typeof globalThis.fetch
 }
@@ -177,6 +184,8 @@ export function personasHandler(
   const cookies = createEndUserCookies(options.secret)
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis)
   const turnstile = options.turnstile ?? null
+  const clientIp = (request: Request): string | null =>
+    (options.clientIp ?? ((r: Request) => r.headers.get('cf-connecting-ip')))(request) || null
 
   function route(request: Request): Route | 'not_found' | 'method_not_allowed' {
     const pathname = new URL(request.url).pathname
@@ -210,7 +219,7 @@ export function personasHandler(
     const form = new FormData()
     form.set('secret', turnstile.secretKey)
     form.set('response', token)
-    const ip = request.headers.get('cf-connecting-ip')
+    const ip = clientIp(request)
     if (ip) form.set('remoteip', ip)
     try {
       const response = await fetchImpl(TURNSTILE_VERIFY_URL, { method: 'POST', body: form })
@@ -260,7 +269,7 @@ export function personasHandler(
         setCookie = issued.setCookie
       }
     }
-    const ip = request.headers.get('cf-connecting-ip')
+    const ip = clientIp(request)
     const chat = await mp.personas.start(slug, {
       endUser,
       ...(ip ? { endUserIp: ip } : {}),

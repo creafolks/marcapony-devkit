@@ -267,6 +267,11 @@ Errors come back as `{ code, error }` with the API's status.
   id. Locally there is none: pass a fixed development value of at least 32
   characters. An app with its own sign-in can pass
   `endUser: (request) => id` instead (return null to fall back to the cookie).
+- **Visitor IP.** The handler passes the visitor's address as `endUserIp`
+  (and to the Turnstile check), read from `cf-connecting-ip` by default. Only
+  Cloudflare sets that header in a way a browser cannot forge: on any other
+  host, or behind another proxy, pass `clientIp: (request) => ...` reading a
+  source you trust, or the limit on new visitors per address can be bypassed.
 - **History.** The handler stores nothing. It forwards the history the browser
   sends, unchanged, and returns the signed list to keep for the next message
   (for example in `sessionStorage`).
