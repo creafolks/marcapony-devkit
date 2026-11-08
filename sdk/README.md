@@ -237,7 +237,10 @@ need to `resume` later.
 | `RateLimitError`             | `rate_limited`: too many messages from one player, or too many new players from one address |
 
 A game can show "the shopkeeper is resting" for the first two instead of
-failing. No request is ever retried on them. An `error` event in a stream is
+failing. A `RateLimitError` carries `retryAfter`, the seconds to wait. A start
+with an `idempotencyKey` waits that long and tries again by itself when it is
+60 seconds or less; a message is never sent again, so wait and send it
+yourself. `personasHandler` passes the wait on as a `Retry-After` header. No request is ever retried on them. An `error` event in a stream is
 thrown by the iterator as the same classes.
 
 ### Test mode

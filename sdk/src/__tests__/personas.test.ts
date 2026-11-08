@@ -246,6 +246,42 @@ describe('chat.send', () => {
   })
 })
 
+describe('Retry-After on a character rate limit', () => {
+  const limited = (seconds: string) =>
+    jsonResponse({ error: { code: 'rate_limited', message: 'slow down' } }, 429, {
+      'Retry-After': seconds,
+    })
+
+  it('is waited for before a start with an idempotency key is sent again', async () => {
+    const { fetch, calls } = makeFetch([limited('1'), started()])
+    const begun = Date.now()
+    const chat = await client(fetch).personas.start('barista', { idempotencyKey: 'start-1' })
+    expect(Date.now() - begun).toBeGreaterThanOrEqual(950)
+    expect(chat.id).toBe(CONVERSATION)
+    expect(calls).toHaveLength(2)
+  })
+
+  it('is handed to the caller when it is longer than a request should wait', async () => {
+    const { fetch, calls } = makeFetch([limited('3600')])
+    const err = await client(fetch)
+      .personas.start('barista', { idempotencyKey: 'start-1' })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RateLimitError)
+    expect((err as RateLimitError).retryAfter).toBe(3600)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('never makes a message be sent again', async () => {
+    const { fetch, calls } = makeFetch([limited('0')])
+    const err = await client(fetch)
+      .personas.resume('barista', CONVERSATION)
+      .send('x')
+      .catch((e: unknown) => e)
+    expect((err as RateLimitError).retryAfter).toBe(0)
+    expect(calls).toHaveLength(1)
+  })
+})
+
 describe('a refused history', () => {
   const refused = () =>
     jsonResponse({ error: { code: 'invalid_history', message: 'history refused' } }, 422)

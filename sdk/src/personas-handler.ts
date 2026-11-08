@@ -1,5 +1,5 @@
 import type { MarcaponyClient } from './client.js'
-import { MarcaponyError, VerificationRequiredError } from './errors.js'
+import { MarcaponyError, RateLimitError, VerificationRequiredError } from './errors.js'
 import type { PersonaChat } from './resources/personas.js'
 import type { PersonaEvent, PersonaHistoryEntry, PersonaReportReason } from './types/index.js'
 
@@ -420,7 +420,12 @@ export function personasHandler(
       }
     } catch (err) {
       if (err instanceof MarcaponyError && err.status >= 400 && err.status < 600) {
-        return refuse(err.status, err.code, publicMessage(err))
+        const response = refuse(err.status, err.code, publicMessage(err))
+        // Tell the browser how long to wait, as Marcapony told us.
+        if (err instanceof RateLimitError && err.retryAfter !== null) {
+          response.headers.set('Retry-After', String(err.retryAfter))
+        }
+        return response
       }
       console.error(err)
       return refuse(502, 'server_error', 'The character could not answer')

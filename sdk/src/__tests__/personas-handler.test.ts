@@ -293,6 +293,19 @@ describe('messages', () => {
     expect(await response.json()).toEqual({ code: 'persona_daily_cap', error: 'Resting today' })
   })
 
+  it('passes Retry-After on to the browser', async () => {
+    const { handler } = setup([
+      () =>
+        new Response(
+          JSON.stringify({ error: { code: 'rate_limited', message: 'Too many messages' } }),
+          { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '42' } },
+        ),
+    ])
+    const response = await handler(post(`${ROUTE}/messages`, { text: 'Hi' }))
+    expect(response.status).toBe(429)
+    expect(response.headers.get('Retry-After')).toBe('42')
+  })
+
   it('refuses an empty or overlong message before calling Marcapony', async () => {
     const { handler, calls } = setup([])
     expect((await handler(post(`${ROUTE}/messages`, { text: '   ' }))).status).toBe(400)
