@@ -4,6 +4,33 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.8.0] - 2026-11-08
+
+### Added
+
+- `personas`: conversations with the account's characters from an app's
+  server. `list()` and `get(slug)` read the characters granted to the app;
+  `start(slug, options)` begins a conversation and `resume(slug, id)`
+  continues a stored one. A chat has `send` (the whole answer), `stream` (the
+  answer as events), `report`, `verify` and `transcript`, and keeps the signed
+  `history` that each message carries when the character keeps no transcript.
+  Needs the `personas:chat` scope. Only on the client from `createClient`, not
+  on `forRequest()`.
+- `personasHandler(mp, options)`: a request handler for the app's own chat
+  route. It keeps an anonymous visitor id in a signed `mp_eu` cookie (signed
+  with `MARCAPONY_APP_SECRET`), forwards messages and history, streams answers
+  through, and supports an optional Turnstile check.
+- Error classes `PersonaUnavailableError`, `PersonaLimitError` and
+  `VerificationRequiredError`, and the `PERSONA_LIMIT_CODES` list.
+  `invalid_history` maps to `ValidationError` and `service_unavailable` to
+  `ServerError`.
+
+### Changed
+
+- No request is retried on a character limit or pause (`PersonaLimitError`,
+  `PersonaUnavailableError`), whatever its status. Other retries are unchanged.
+- Every request sends `Accept: application/json`.
+
 ## [0.7.1] - 2026-10-31
 
 ### Changed
