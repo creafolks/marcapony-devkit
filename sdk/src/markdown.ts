@@ -117,6 +117,8 @@ function stripControlCharacters(value: string): string {
 class InlineParser {
   /** Backtick run lengths with no closing run after the last search. */
   private readonly noCloser = new Set<number>()
+  /** Closers already found, by search start and run length, so nested `[` scans reuse them. */
+  private readonly closers = new Map<string, number>()
 
   constructor(
     private readonly src: string,
@@ -126,6 +128,9 @@ class InlineParser {
   /** Index of the closing backtick run of exactly `length`, or -1. */
   private backtickClose(from: number, length: number): number {
     if (this.noCloser.has(length)) return -1
+    const key = `${from}:${length}`
+    const cached = this.closers.get(key)
+    if (cached !== undefined) return cached
     const { src } = this
     let j = from
     while (j < src.length) {
@@ -134,7 +139,10 @@ class InlineParser {
         continue
       }
       const run = runLength(src, j, '`')
-      if (run === length) return j
+      if (run === length) {
+        this.closers.set(key, j)
+        return j
+      }
       j += run
     }
     this.noCloser.add(length)

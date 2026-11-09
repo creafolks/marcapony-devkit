@@ -253,6 +253,7 @@ describe('renderPersonaMarkdown: blocks', () => {
       '_'.repeat(30_000),
       `[a](${'('.repeat(10_000)}`,
       `${'** '.repeat(10_000)}**`,
+      `${'['.repeat(1_000)}\`\`${'a'.repeat(100_000)}\`\``,
     ]
     const started = performance.now()
     for (const input of inputs) md(input)
