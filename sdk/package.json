@@ -1,6 +1,6 @@
 {
   "name": "marcapony-sdk",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Official client for the Marcapony external API (/ext/v1)",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -17,6 +17,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./markdown": {
+      "types": "./dist/markdown.d.ts",
+      "import": "./dist/markdown.js"
     }
   },
   "main": "./dist/index.js",

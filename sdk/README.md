@@ -7,11 +7,11 @@ Bun, Deno).
 ## Install
 
 ```sh
-npm install marcapony-sdk@~0.8.0
+npm install marcapony-sdk@~0.9.0
 ```
 
 The SDK is 0.x, so a minor release may contain breaking changes. Pin a minor
-range (`~0.8.0`) and read [CHANGELOG.md](./CHANGELOG.md) before upgrading.
+range (`~0.9.0`) and read [CHANGELOG.md](./CHANGELOG.md) before upgrading.
 
 ## Quickstart
 
@@ -210,6 +210,34 @@ const reply = await chat.send('And a dessert?') // waits for the whole answer
   twice; send it again yourself if you want to. The one exception is a refused
   history (see History), which the API refuses before the turn runs. A message may take up to 120
   seconds, whatever `timeoutMs` is set to. Send one message of a chat at a time.
+
+### Showing answers
+
+An answer (`reply.text`, the `text` events of a stream, and the answers in
+`chat.transcript()`) is Markdown. Characters write only a small subset: bold,
+emphasis, strikethrough, inline code, links, bare URLs and one level of `-` or
+`1.` lists. Shown as it is, a visitor sees `**Burger**` and
+`[Burger](https://...)`, so render it:
+
+```ts
+import { personaMarkdownToText, renderPersonaMarkdown } from 'marcapony-sdk'
+
+bubble.innerHTML = renderPersonaMarkdown(reply.text)
+notify(personaMarkdownToText(reply.text)) // "Try the Burger (https://...)"
+```
+
+`renderPersonaMarkdown` escapes all text and turns only that subset into
+HTML, so its output is safe to set as `innerHTML`. Headings, images, tables,
+quotes and raw HTML stay as escaped text. A link opens in a new tab with
+`rel="noopener noreferrer"`, and only http, https, mailto and tel links and
+relative URLs become links; any other scheme, such as `javascript:`, shows just
+the label. While a stream is running, render the whole text received so far
+each time, not each piece. `personaMarkdownToText` strips the markup for
+notifications, SMS or any place without HTML. In a browser bundle you can
+import both from `marcapony-sdk/markdown`, which pulls in nothing else.
+
+A React app may use `react-markdown` instead; keep raw HTML off (do not add
+`rehype-raw`) and keep its default URL check.
 
 ### History
 
