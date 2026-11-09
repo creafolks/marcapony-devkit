@@ -4,6 +4,22 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.9.0] - 2026-11-09
+
+### Added
+
+- `renderPersonaMarkdown(text)`: renders a character's answer, which is
+  Markdown, as safe HTML. Only the subset characters write becomes markup:
+  paragraphs and line breaks, bold, emphasis, strikethrough, inline code,
+  links, bare http(s) URLs and one level of bullet or numbered lists.
+  Everything else, raw HTML included, is escaped text. Links open in a new tab
+  with `rel="noopener noreferrer"`; only http, https, mailto, tel and relative
+  URLs become links, and any other scheme leaves just the label.
+- `personaMarkdownToText(text)`: the same answer as plain text, with a link
+  written as `label (url)`.
+- Both are also exported from `marcapony-sdk/markdown`, for browser bundles
+  that need nothing else from the SDK.
+
 ## [0.8.0] - 2026-11-08
 
 ### Added
