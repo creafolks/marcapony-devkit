@@ -7,11 +7,11 @@ Bun, Deno).
 ## Install
 
 ```sh
-npm install marcapony-sdk@~0.8.0
+npm install marcapony-sdk@~0.9.0
 ```
 
 The SDK is 0.x, so a minor release may contain breaking changes. Pin a minor
-range (`~0.8.0`) and read [CHANGELOG.md](./CHANGELOG.md) before upgrading.
+range (`~0.9.0`) and read [CHANGELOG.md](./CHANGELOG.md) before upgrading.
 
 ## Quickstart
 
