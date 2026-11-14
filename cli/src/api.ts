@@ -1,5 +1,6 @@
 /** Thin HTTP layer over the endpoints the CLI uses. Zero dependencies. */
 
+import type { CollectionDeclaration } from './collections.js'
 import { SDK_VERSION_HEADER, cliFetch } from './client-info.js'
 
 export interface LinkResponse {
@@ -56,6 +57,8 @@ export interface DeploymentRequest {
   dataAccess?: 'account' | 'visitor' | 'customer' | 'team'
   permissions?: Array<{ id: string; label: string; grants: string[] }>
   portal?: { title?: string; icon?: string; sortOrder?: number }
+  /** `collections` of a version 1 marcapony.json; version 2 sends it inside `manifest`. */
+  collections?: CollectionDeclaration[]
   assetsBinding?: string
   /** The source commit pushed for this deploy, so the platform can show it as a version. */
   source?: DeploymentSource
@@ -79,6 +82,7 @@ export type ValidateRequest = Pick<
   | 'dataAccess'
   | 'permissions'
   | 'portal'
+  | 'collections'
   | 'baseSourceRef'
   | 'force'
   | 'manifest'
