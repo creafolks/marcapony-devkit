@@ -45,6 +45,12 @@ export class RateLimitError extends MarcaponyError {
   }
 }
 export class ConflictError extends MarcaponyError {}
+/**
+ * The signed-in customer already holds as many records as the collection's
+ * `maxRows` allows (`collection_full`). Replacing or deleting one of their
+ * records still works; this is the app's own limit, not the plan's.
+ */
+export class CollectionFullError extends MarcaponyError {}
 export class ServerError extends MarcaponyError {}
 
 /**
@@ -100,6 +106,7 @@ const ERROR_BY_CODE: Record<
   collection_not_found: NotFoundError,
   index_not_declared: ValidationError,
   index_building: ConflictError,
+  collection_full: CollectionFullError,
   validation_failed: ValidationError,
   plugin_required: PluginRequiredError,
   tier_limit_exceeded: TierLimitError,

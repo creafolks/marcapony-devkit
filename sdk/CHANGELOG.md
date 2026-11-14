@@ -17,9 +17,11 @@ minor release may contain breaking changes; each one is listed below.
   false when there was nothing to delete. A stale `ifVersion` throws
   `ConflictError`.
 - Error codes `collection_not_found` (`NotFoundError`), `index_not_declared`
-  (`ValidationError`) and `index_building` (`ConflictError`). `collection_full`
-  (the customer holds `maxRows` records) arrives as a `MarcaponyError` with
-  that code.
+  (`ValidationError`) and `index_building` (`ConflictError`), and a new
+  `CollectionFullError` for `collection_full` (the customer holds `maxRows`
+  records in the collection).
+- The records calls need an app permission that grants `records.own.read`
+  (reads) or `records.own.write` (writes), assigned to customers by the owner.
 
 ## [0.9.0] - 2026-11-09
 

@@ -388,6 +388,13 @@ customer. Declare the collections, deploy, and use them through
 ```json
 {
   "dataAccess": "customer",
+  "permissions": [
+    {
+      "id": "journal",
+      "label": "Keep a journal",
+      "grants": ["records.own.read", "records.own.write"]
+    }
+  ],
   "collections": [
     {
       "name": "entries",
@@ -403,6 +410,10 @@ customer. Declare the collections, deploy, and use them through
 }
 ```
 
+- A customer reaches their records only with a permission that grants
+  `records.own.read` (reads) or `records.own.write` (writes). Declare one under
+  `permissions`, then give it to customers on the app's page in the dashboard.
+  Without it every records call answers 403.
 - `name`: lower case letters, digits and underscores. At most 16 collections.
 - `read` and `write` are `own`: a record belongs to the customer who wrote it.
 - `maxRows`: how many records one customer may hold (1 to 10,000, default 1,000).

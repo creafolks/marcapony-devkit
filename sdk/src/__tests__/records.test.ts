@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test'
-import { ConflictError, createClient, type MarcaponyError, NotFoundError } from '../index'
+import {
+  CollectionFullError,
+  ConflictError,
+  createClient,
+  type MarcaponyError,
+  NotFoundError,
+} from '../index'
 
 const BASE = 'https://api.test/ext/v1'
 
@@ -82,6 +88,16 @@ describe('me.records', () => {
       me.records('entries').put('k1', { status: 'x' }, { ifVersion: 1 }),
     ).rejects.toBeInstanceOf(ConflictError)
     expect(seen).toHaveLength(1)
+  })
+
+  it('raises CollectionFullError when the customer is at maxRows', async () => {
+    const { me } = scopedClient([failure(403, 'collection_full')])
+    const full = await me
+      .records('entries')
+      .create({ status: 'open' })
+      .catch((err: unknown) => err)
+    expect(full).toBeInstanceOf(CollectionFullError)
+    expect((full as MarcaponyError).code).toBe('collection_full')
   })
 
   it('creates under a generated key', async () => {

@@ -148,7 +148,9 @@ await mp.forRequest(request).reservations.updateStatus(id, { status: 'approved' 
 
 A customer app in the portal can keep JSON records for the signed-in customer:
 preferences, a log, a wish list. Declare a collection under `collections` in
-`marcapony.json` (see the `marcapony` CLI's README), deploy, then:
+`marcapony.json` together with a permission that grants `records.own.read`
+and `records.own.write` (see the `marcapony` CLI's README), deploy, and have
+the owner give that permission to customers on the app's page. Then:
 
 ```ts
 interface Entry extends Record<string, unknown> {
@@ -166,6 +168,8 @@ await entries.delete('2026-11-14')
 const created = await entries.create({ status: 'open', loggedAt: '2026-11-15' })
 ```
 
+- Reads need the `records.own.read` grant and writes `records.own.write`. A
+  customer without the permission gets `PermissionDeniedError` (403).
 - A record belongs to the customer who wrote it. The platform takes the
   customer from the identity, so two customers can use the same key and
   neither can reach the other's record.
@@ -178,8 +182,8 @@ const created = await entries.create({ status: 'open', loggedAt: '2026-11-15' })
   indexes, inclusive). Filter further in your own code.
 - A record is at most 64 KB, a key 1 to 128 of `A-Z a-z 0-9 . : _ -` (never a
   lone dot or two dots in a row). One customer holds at most `maxRows` records
-  per collection (`collection_full`), and the account's plan caps the total
-  (`TierLimitError`).
+  per collection: a write past it throws `CollectionFullError`. The account's
+  plan caps the total (`TierLimitError`).
 - These writes are real in test mode, and each environment has its own
   records. While the owner previews the app as a customer nothing is saved and
   the answer carries `simulated: true`.
