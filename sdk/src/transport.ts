@@ -9,13 +9,15 @@ import type { ResolvedOptions } from './options.js'
 import type { ApiPath } from './path.js'
 import type { Page, RequestOptions } from './types/index.js'
 
-export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 export interface RequestArgs {
   method: HttpMethod
   path: ApiPath
   query?: object
   body?: unknown
+  /** Headers of this one request, such as a precondition. */
+  headers?: Record<string, string>
   idempotencyKey?: string
   /** Overrides the client's per-attempt timeout. */
   timeoutMs?: number
@@ -86,6 +88,7 @@ export class Transport {
 
   private init(args: RequestArgs, accept = 'application/json'): RequestInit {
     const headers: Record<string, string> = {
+      ...args.headers,
       ...this.extraHeaders,
       Authorization: `Bearer ${this.options.apiKey}`,
       Accept: accept,

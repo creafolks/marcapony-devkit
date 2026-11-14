@@ -4,6 +4,23 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.10.0] - 2026-11-15
+
+### Added
+
+- `forRequest(request).me.records<T>(name)`: JSON records a customer app in the
+  portal keeps for the signed-in customer, in a collection declared under
+  `collections` in `marcapony.json`. `get(key)` answers null for a missing
+  record, `list(params)` pages by cursor and filters by one declared index
+  (`eq`, `prefix`, `gte`, `lte`), `put(key, data, { ifVersion })` creates or
+  replaces, `create(data)` uses a generated key and `delete(key)` resolves
+  false when there was nothing to delete. A stale `ifVersion` throws
+  `ConflictError`.
+- Error codes `collection_not_found` (`NotFoundError`), `index_not_declared`
+  (`ValidationError`) and `index_building` (`ConflictError`). `collection_full`
+  (the customer holds `maxRows` records) arrives as a `MarcaponyError` with
+  that code.
+
 ## [0.9.0] - 2026-11-09
 
 ### Added

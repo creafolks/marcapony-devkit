@@ -1,4 +1,5 @@
 import { path } from '../path.js'
+import { recordsResource } from './records.js'
 import { create, get, list, update, type Transport } from '../transport.js'
 import type {
   CreateOwnReservationInput,
@@ -56,6 +57,11 @@ export function meResource(t: Transport) {
       list: (params?: ListParams): Promise<Page<OwnFormSubmission>> =>
         list(t, path`/me/form-submissions`, params),
     },
+    /**
+     * The customer's records in a collection the app declares in
+     * `marcapony.json`: `records<Entry>('entries').put(key, data)`.
+     */
+    records: recordsResource(t),
   }
 }
 

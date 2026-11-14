@@ -1,6 +1,7 @@
 export { createClient, type MarcaponyClient, type ScopedClient } from './client.js'
 export type { MarcaponyClientOptions } from './options.js'
 export type { MeClient } from './resources/me.js'
+export type { RecordCollectionClient } from './resources/records.js'
 export type { MemberClient } from './resources/member.js'
 export type { BlogAuthorsResource } from './resources/blog-authors.js'
 export type { BlogCategoriesResource } from './resources/blog-categories.js'
