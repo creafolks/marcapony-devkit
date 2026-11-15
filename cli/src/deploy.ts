@@ -20,7 +20,9 @@ import {
   type DeploymentView,
   type SourceHead,
 } from './api.js'
+import { collectionPlacementProblem, collectionProblems } from './collections.js'
 import {
+  CONFIG_FILE,
   isManifestV2,
   publicDirOf,
   readConfig,
@@ -128,6 +130,8 @@ export async function runDeployDetailed(options: DeployOptions): Promise<DeployR
       exitCode: EXIT.notLinked,
     })
   }
+
+  refuseInvalidCollections(config)
 
   const apiRoot = resolveApiRoot(options.cliEnv)
   const apiKey = await resolveDeployKey({ cwd: options.cwd, env: options.env, apiRoot, fetchImpl })
@@ -381,6 +385,17 @@ export async function warnIfKeyExpiring(
  * What the deploy says about the runtime: a version 2 manifest goes as
  * written and the platform translates it; version 1 fields go as before.
  */
+/** A mistake in `collections` is reported before the build, with every problem at once. */
+function refuseInvalidCollections(config: MarcaponyConfig): void {
+  const placement = collectionPlacementProblem(config)
+  const problems = [...collectionProblems(config.collections), ...(placement ? [placement] : [])]
+  if (problems.length === 0) return
+  throw new CliError(
+    `${CONFIG_FILE} has ${problems.length === 1 ? 'a problem' : 'problems'} under collections:\n${problems.map((problem) => `  - ${problem}`).join('\n')}`,
+    { code: 'validation_failed' },
+  )
+}
+
 function runtimeFieldsOf(config: MarcaponyConfig): Partial<DeploymentRequest> {
   if (isManifestV2(config)) return { manifest: manifestOf(config) }
   return {
@@ -398,7 +413,7 @@ function manifestOf(config: MarcaponyConfig): Record<string, unknown> {
 
 function declarationsOf(
   config: MarcaponyConfig,
-): Pick<DeploymentRequest, 'placement' | 'dataAccess' | 'permissions' | 'portal'> {
+): Pick<DeploymentRequest, 'placement' | 'dataAccess' | 'permissions' | 'portal' | 'collections'> {
   return {
     ...(config.placement ? { placement: config.placement } : {}),
     ...(config.dataAccess ? { dataAccess: config.dataAccess } : {}),
@@ -406,6 +421,7 @@ function declarationsOf(
       ? { permissions: config.permissions.map((p) => ({ ...p, grants: p.grants ?? [] })) }
       : {}),
     ...(config.portal ? { portal: config.portal } : {}),
+    ...(config.collections ? { collections: config.collections } : {}),
   }
 }
 

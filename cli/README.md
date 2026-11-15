@@ -374,9 +374,60 @@ settings. `npx marcapony app link` writes it for a new project, and
 | `dataAccess`         | no       | Whose data the app works with: `account`, `visitor`, `customer` or `team`       |
 | `permissions`        | no       | Permissions the app offers (`id`, `label`, `grants`); the owner assigns them    |
 | `portal`             | no       | Portal menu entry: `title`, `icon`, `sortOrder`                                 |
+| `collections`        | no       | Records the app keeps per signed-in customer; see below                         |
 
 Add `"$schema": "./node_modules/marcapony/manifest.schema.json"` for completion
 in your editor. Projects linked before this format keep working unchanged.
+
+### Collections
+
+A customer app in the portal can keep its own JSON records for each signed-in
+customer. Declare the collections, deploy, and use them through
+`mp.forRequest(request).me.records(name)` in the SDK:
+
+```json
+{
+  "dataAccess": "customer",
+  "permissions": [
+    {
+      "id": "journal",
+      "label": "Keep a journal",
+      "grants": ["records.own.read", "records.own.write"]
+    }
+  ],
+  "collections": [
+    {
+      "name": "entries",
+      "read": "own",
+      "write": "own",
+      "maxRows": 2000,
+      "indexes": [
+        { "field": "status", "type": "string" },
+        { "field": "loggedAt", "type": "date" }
+      ]
+    }
+  ]
+}
+```
+
+- A customer reaches their records only with a permission that grants
+  `records.own.read` (reads) or `records.own.write` (writes). Declare one under
+  `permissions`, then give it to customers on the app's page in the dashboard.
+  Without it every records call answers 403.
+- `name`: lower case letters, digits and underscores. At most 16 collections.
+- `read` and `write` are `own`: a record belongs to the customer who wrote it.
+- `maxRows`: how many records one customer may hold (1 to 10,000, default 1,000).
+- `indexes`: up to 4 top-level fields a list can filter and order by, each a
+  `string`, `number`, `date` or `boolean`. An index added to a collection that
+  already holds records is filled in the background and answers
+  `index_building` until it is ready. To change an index's type, remove it in
+  one deploy and add it again in the next.
+- Each environment has its own records, so a test environment never touches
+  production's. A deploy never deletes records: a collection you stop declaring
+  goes offline at once and is kept for 30 days, and declaring it again brings
+  it back. Leaving `collections` out changes nothing.
+
+The CLI checks the declaration before the build and lists every problem.
 
 The source ignore rules apply in this order, and a later one can re-include
 with `!` what an earlier one excluded: your `.gitignore` files and

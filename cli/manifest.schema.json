@@ -92,6 +92,41 @@
         "icon": { "type": "string" },
         "sortOrder": { "type": "number" }
       }
+    },
+    "collections": {
+      "type": "array",
+      "maxItems": 16,
+      "description": "Records the app keeps for each signed-in customer (customer apps in the portal), used through me.records(name) in the SDK.",
+      "items": {
+        "type": "object",
+        "required": ["name", "read", "write"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$" },
+          "read": { "const": "own" },
+          "write": { "const": "own" },
+          "maxRows": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 1000,
+            "description": "Records one customer may hold in this collection."
+          },
+          "indexes": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "required": ["field", "type"],
+              "additionalProperties": false,
+              "properties": {
+                "field": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,47}$" },
+                "type": { "enum": ["string", "number", "date", "boolean"] }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

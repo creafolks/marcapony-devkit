@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { CollectionDeclaration } from './collections.js'
 
 /**
  * `marcapony.json` — the project's link to its Marcapony app. Written by
@@ -56,7 +57,7 @@ export interface MarcaponyConfig {
    * dashboard. `grants` names platform permissions (customer apps:
    * `reservations.own.read`, `reservations.own.create`, `reservations.own.cancel`,
    * `orders.own.read`, `profile.own.read`, `payment-links.own.read`,
-   * `forms.own.read`; team tools: `reservations.read`, `reservations.write`,
+   * `forms.own.read`, `records.own.read`, `records.own.write`; team tools: `reservations.read`, `reservations.write`,
    * `orders.read`, `customers.read`) or is empty for a permission only the app
    * interprets.
    */
@@ -67,6 +68,13 @@ export interface MarcaponyConfig {
    * in the dashboard; a deploy that carries it overwrites that.
    */
   portal?: { title?: string; icon?: string; sortOrder?: number }
+  /**
+   * The records the app keeps for each signed-in customer (customer apps in
+   * the portal only), read and written through `me.records(name)` in the SDK.
+   * Omitted leaves the stored collections alone; an empty list removes them
+   * (their records are kept for 30 days).
+   */
+  collections?: CollectionDeclaration[]
 }
 
 export const CONFIG_FILE = 'marcapony.json'

@@ -131,7 +131,7 @@ await mp.forRequest(request).reservations.updateStatus(id, { status: 'approved' 
 
 | Client                       | Calls                                                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `forRequest(request).me`     | `profile.get`, `reservations.list/get/create/cancel`, `orders.list/get`, `paymentLinks.list/get`, `formSubmissions.list` (metadata only) |
+| `forRequest(request).me`     | `profile.get`, `reservations.list/get/create/cancel`, `orders.list/get`, `paymentLinks.list/get`, `formSubmissions.list` (metadata only), `records(name)` |
 | `forRequest(request)` member | `reservations.list/get/create/updateStatus`, `orders.list/get`, `customers.list/get`                                                     |
 
 - `identity()` is for display; the platform enforces access on every call.
@@ -143,6 +143,52 @@ await mp.forRequest(request).reservations.updateStatus(id, { status: 'approved' 
 - Locally there is no identity: `identity()` throws without `appId` and returns
   null with it, and `forRequest()` throws `UnauthorizedError`. Test portal and
   team flows on the deployed app from the dashboard.
+
+## Your app's own records
+
+A customer app in the portal can keep JSON records for the signed-in customer:
+preferences, a log, a wish list. Declare a collection under `collections` in
+`marcapony.json` together with a permission that grants `records.own.read`
+and `records.own.write` (see the `marcapony` CLI's README), deploy, and have
+the owner give that permission to customers on the app's page. Then:
+
+```ts
+interface Entry extends Record<string, unknown> {
+  status: 'open' | 'done'
+  loggedAt: string
+}
+
+const entries = mp.forRequest(request).me.records<Entry>('entries')
+
+await entries.put('2026-11-14', { status: 'done', loggedAt: '2026-11-14' })
+const one = await entries.get('2026-11-14') // null when there is none
+const page = await entries.list({ index: 'loggedAt', gte: '2026-11-01', order: 'desc' })
+if (one) await entries.put(one.key, { ...one.data, status: 'open' }, { ifVersion: one.version })
+await entries.delete('2026-11-14')
+const created = await entries.create({ status: 'open', loggedAt: '2026-11-15' })
+```
+
+- Reads need the `records.own.read` grant and writes `records.own.write`. A
+  customer without the permission gets `PermissionDeniedError` (403).
+- A record belongs to the customer who wrote it. The platform takes the
+  customer from the identity, so two customers can use the same key and
+  neither can reach the other's record.
+- `put` replaces the whole record. Pass `ifVersion` to write only if nobody
+  changed it since you read it; a mismatch throws `ConflictError`.
+- `list` returns `{ data, meta: { nextCursor } }`; pass `nextCursor` back as
+  `cursor` until it is null. Without `index` the most recently changed records
+  come first. With `index` (a field declared under `indexes`) it takes one
+  filter: `eq`, `prefix` (string indexes), or `gte` / `lte` (number and date
+  indexes, inclusive). Filter further in your own code.
+- A record is at most 64 KB, a key 1 to 128 of `A-Z a-z 0-9 . : _ -` (never a
+  lone dot or two dots in a row). One customer holds at most `maxRows` records
+  per collection: a write past it throws `CollectionFullError`. The account's
+  plan caps the total (`TierLimitError`).
+- These writes are real in test mode, and each environment has its own
+  records. While the owner previews the app as a customer nothing is saved and
+  the answer carries `simulated: true`.
+- Do not store card data or passwords, and do not copy what the platform
+  already holds.
 
 ## Data access
 

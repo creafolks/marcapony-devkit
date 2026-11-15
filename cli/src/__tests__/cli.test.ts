@@ -258,8 +258,9 @@ describe('runLink', () => {
     expect(agents).not.toContain('mpk_secret')
   })
 
-  it('keeps placement and permissions from an existing marcapony.json', async () => {
+  it('keeps placement, permissions and collections from an existing marcapony.json', async () => {
     const permissions = [{ id: 'view', label: 'View', grants: ['reservations.own.read'] }]
+    const collections = [{ name: 'entries', read: 'own', write: 'own' }]
     writeFileSync(
       join(dir, 'marcapony.json'),
       JSON.stringify({
@@ -267,6 +268,7 @@ describe('runLink', () => {
         worker: 'dist/w.js',
         placement: 'portal',
         permissions,
+        collections,
       }),
     )
     const { fetch: fetchImpl } = makeFetch([
@@ -293,6 +295,7 @@ describe('runLink', () => {
     expect(config.worker).toBe('dist/w.js')
     expect(config.placement).toBe('portal')
     expect(config.permissions).toEqual(permissions)
+    expect(config.collections).toEqual(collections)
   })
 
   // .dev.vars holds a live key with the app's data scopes plus apps:deploy;
