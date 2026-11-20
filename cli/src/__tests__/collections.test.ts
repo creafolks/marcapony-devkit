@@ -5,6 +5,37 @@ import { dirname, join } from 'node:path'
 import { CliError } from '../api'
 import { collectionPlacementProblem, collectionProblems } from '../collections'
 import { runDeployDetailed } from '../deploy'
+import { readFileSync } from 'node:fs'
+
+interface CollectionRule {
+  case: string
+  input: unknown[]
+  ok: boolean
+  dataAccess?: string
+}
+
+// The platform's own cases for the collection rules, kept in step with it.
+const rules = JSON.parse(
+  readFileSync(join(import.meta.dir, 'fixtures', 'collection-rules.json'), 'utf8'),
+) as { schema: CollectionRule[]; dataAccess: CollectionRule[] }
+
+describe('the collection rules fixture', () => {
+  for (const rule of rules.schema) {
+    it(`schema: ${rule.case}`, () => {
+      expect(collectionProblems(rule.input).length === 0).toBe(rule.ok)
+    })
+  }
+  for (const rule of rules.dataAccess) {
+    it(`data access: ${rule.case}`, () => {
+      const problem = collectionPlacementProblem({
+        collections: rule.input,
+        dataAccess: rule.dataAccess,
+      })
+      expect(collectionProblems(rule.input)).toEqual([])
+      expect(problem === null).toBe(rule.ok)
+    })
+  }
+})
 
 const ENTRIES = {
   name: 'entries',
@@ -42,7 +73,7 @@ describe('collectionProblems', () => {
     expect(problems).toEqual([
       'collections[0].color is not a known field',
       'collections[0].name must be lower case letters, digits and underscores, starting with a letter (at most 48)',
-      'collections[0].write must be "own"',
+      'collections[0].write must be "own" on a customer collection',
       'collections[0].maxRows must be a whole number from 1 to 10000',
       'collections[1].indexes[0].field must be a top-level key of the record: letters, digits and underscores, starting with a letter',
       'collections[1].indexes[1].type must be one of string, number, date, boolean',
