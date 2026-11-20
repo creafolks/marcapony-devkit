@@ -4,6 +4,15 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.11.0] - 2026-11-20
+
+### Added
+
+- `records<T>(name)` and `forRequest(request).records<T>(name)`: shared
+  collections, declared with `"scope": "shared"`, whose records belong to the
+  app instead of one customer. Same calls as `me.records`.
+- Error code `write_not_allowed` (`PermissionDeniedError`).
+
 ## [0.10.0] - 2026-11-15
 
 ### Added

@@ -2,6 +2,7 @@ import { UnauthorizedError } from './errors.js'
 import { createIdentityVerifier, IDENTITY_HEADER, type Identity } from './identity.js'
 import { resolveOptions, type MarcaponyClientOptions } from './options.js'
 import { Transport } from './transport.js'
+import type { RecordData } from './types/index.js'
 import { blogAuthorsResource, type BlogAuthorsResource } from './resources/blog-authors.js'
 import { blogCategoriesResource, type BlogCategoriesResource } from './resources/blog-categories.js'
 import {
@@ -28,6 +29,7 @@ import {
   type PaymentLinksResource,
 } from './resources/payments.js'
 import { personasResource, type PersonasResource } from './resources/personas.js'
+import { recordsResource, type RecordCollectionClient } from './resources/records.js'
 import { postsResource, type PostsResource } from './resources/posts.js'
 import {
   availabilityBlocksResource,
@@ -56,7 +58,17 @@ export type ScopedClient = {
   /** The identity's kind, read from the token without verifying it (the platform verifies every call). */
   kind: 'customer' | 'member' | null
   me: MeClient
+  /**
+   * The app's shared collections, read and written as this person: a
+   * `signed_in` collection needs it, and a team member writes here.
+   */
+  records: SharedRecords
 } & MemberClient
+
+/** A shared collection by name (`"scope": "shared"` in marcapony.json). */
+export type SharedRecords = <T extends RecordData = RecordData>(
+  collection: string,
+) => RecordCollectionClient<T>
 
 export interface MarcaponyClient {
   /** Who is signed in on this request, or null. For display; the platform enforces access. */
@@ -84,6 +96,13 @@ export interface MarcaponyClient {
    * calls never act as a signed-in person. Needs the `personas:chat` scope.
    */
   personas: PersonasResource
+  /**
+   * The app's shared collections, without a signed-in person: any `public`
+   * collection, and writes to one whose `write` lists `"server"`. Use
+   * `forRequest(request).records` for a `signed_in` collection. A public read
+   * can be up to a minute old.
+   */
+  records: SharedRecords
 }
 
 /** Creates a client for the external API. Use it from server code only. */
@@ -117,7 +136,12 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
         )
       }
       const scoped = t.withHeaders({ [IDENTITY_HEADER]: token })
-      return { kind: unverifiedKind(token), me: meResource(scoped), ...memberClient(scoped) }
+      return {
+        kind: unverifiedKind(token),
+        me: meResource(scoped),
+        records: recordsResource(scoped, 'shared'),
+        ...memberClient(scoped),
+      }
     },
     site: siteResource(t),
     regions: regionsResource(t),
@@ -136,6 +160,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     blogCategories: blogCategoriesResource(t),
     media: mediaResource(t),
     personas: personasResource(t),
+    records: recordsResource(t, 'shared'),
   }
 }
 

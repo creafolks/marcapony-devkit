@@ -374,7 +374,7 @@ settings. `npx marcapony app link` writes it for a new project, and
 | `dataAccess`         | no       | Whose data the app works with: `account`, `visitor`, `customer` or `team`       |
 | `permissions`        | no       | Permissions the app offers (`id`, `label`, `grants`); the owner assigns them    |
 | `portal`             | no       | Portal menu entry: `title`, `icon`, `sortOrder`                                 |
-| `collections`        | no       | Records the app keeps per signed-in customer; see below                         |
+| `collections`        | no       | Records the app keeps, per signed-in customer or shared; see below              |
 
 Add `"$schema": "./node_modules/marcapony/manifest.schema.json"` for completion
 in your editor. Projects linked before this format keep working unchanged.
@@ -415,7 +415,8 @@ customer. Declare the collections, deploy, and use them through
   `permissions`, then give it to customers on the app's page in the dashboard.
   Without it every records call answers 403.
 - `name`: lower case letters, digits and underscores. At most 16 collections.
-- `read` and `write` are `own`: a record belongs to the customer who wrote it.
+- `read` and `write` are `own` on a customer collection (the default
+  `scope`): a record belongs to the customer who wrote it.
 - `maxRows`: how many records one customer may hold (1 to 10,000, default 1,000).
 - `indexes`: up to 4 top-level fields a list can filter and order by, each a
   `string`, `number`, `date` or `boolean`. An index added to a collection that
@@ -426,6 +427,51 @@ customer. Declare the collections, deploy, and use them through
   production's. A deploy never deletes records: a collection you stop declaring
   goes offline at once and is kept for 30 days, and declaring it again brings
   it back. Leaving `collections` out changes nothing.
+
+#### Shared collections
+
+A collection with `"scope": "shared"` keeps records that belong to the app,
+not to one customer: a price list, today's menu, a schedule. Use it through
+`mp.records(name)` in the SDK, or `mp.forRequest(request).records(name)` to
+act as the signed-in person.
+
+```json
+{
+  "collections": [
+    {
+      "name": "menu",
+      "scope": "shared",
+      "read": "public",
+      "write": ["team"],
+      "maxRows": 200
+    }
+  ]
+}
+```
+
+- `read`: `public` (anyone the app serves, no grant needed) or `signed_in` (a
+  signed-in customer with `records.shared.read`, or a team member with
+  `records.shared.team.read`).
+- `write`: the writers, at least one of `feed` (an automation that fills the
+  collection), `team` (a member of a team app with
+  `records.shared.team.write`) and `server` (the app's key without a signed-in
+  person, for writes from your own server). Customers and visitors never write
+  a shared collection.
+- What each app may use depends on its `dataAccess`:
+
+  | `dataAccess`           | `read`                 | `write`                    |
+  | ---------------------- | ---------------------- | -------------------------- |
+  | `account`, `visitor`   | `public`               | `feed`, `server`           |
+  | `customer`             | `public`, `signed_in`  | `feed`, `server`           |
+  | `team`                 | `public`, `signed_in`  | `feed`, `team`, `server`   |
+
+- `maxRows` caps the whole collection.
+- A collection's scope never changes: to switch, declare a collection under a
+  new name.
+- Every reader of the app can see a shared collection. Never put personal data
+  in one. A customer's erasure does not touch it.
+- A change can take up to a minute to show to readers without a signed-in
+  person.
 
 The CLI checks the declaration before the build and lists every problem.
 

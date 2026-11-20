@@ -46,9 +46,10 @@ export class RateLimitError extends MarcaponyError {
 }
 export class ConflictError extends MarcaponyError {}
 /**
- * The signed-in customer already holds as many records as the collection's
- * `maxRows` allows (`collection_full`). Replacing or deleting one of their
- * records still works; this is the app's own limit, not the plan's.
+ * The collection already holds as many records as its `maxRows` allows
+ * (`collection_full`): per customer on a customer collection, in all on a
+ * shared one. Replacing or deleting a record still works; this is the app's
+ * own limit, not the plan's.
  */
 export class CollectionFullError extends MarcaponyError {}
 export class ServerError extends MarcaponyError {}
@@ -114,6 +115,7 @@ const ERROR_BY_CODE: Record<
   invalid_identity: UnauthorizedError,
   scoped_route_required: PermissionDeniedError,
   identity_required: PermissionDeniedError,
+  write_not_allowed: PermissionDeniedError,
   server_error: ServerError,
   service_unavailable: ServerError,
   invalid_history: ValidationError,

@@ -5,6 +5,7 @@ import {
   createClient,
   type MarcaponyError,
   NotFoundError,
+  PermissionDeniedError,
 } from '../index'
 
 const BASE = 'https://api.test/ext/v1'
@@ -140,5 +141,62 @@ describe('me.records', () => {
     await me.records('entries').get('a/b')
     expect(seen[0]?.url).toBe(`${BASE}/me/records/entries/a%2Fb`)
     expect(() => me.records('entries').put('..', {})).toThrow('invalid record id')
+  })
+})
+
+describe('records (shared collections)', () => {
+  function client(answers: Answer[]) {
+    const seen: Seen[] = []
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push({
+        method: init?.method ?? 'GET',
+        url: String(url),
+        headers: init?.headers as Record<string, string>,
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      })
+      const answer = answers.shift() ?? { body: { data: {} } }
+      return new Response(JSON.stringify(answer.body), { status: answer.status ?? 200 })
+    }) as typeof globalThis.fetch
+    const mp = createClient({ apiKey: 'mpk_x', baseUrl: BASE, appId: 'app-1', fetch: fetchImpl })
+    return { seen, mp }
+  }
+
+  it('reads a public collection on /records without an identity', async () => {
+    const { seen, mp } = client([{ body: { data: [record], meta: { nextCursor: null } } }])
+    const page = await mp.records<Entry>('rates').list({ index: 'code', eq: 'USD' })
+    expect(page.data[0]?.key).toBe('k1')
+    expect(seen[0]?.url).toBe(`${BASE}/records/rates?index=code&eq=USD`)
+    expect(seen[0]?.headers['x-marcapony-identity']).toBeUndefined()
+  })
+
+  it('writes as the signed-in member through forRequest', async () => {
+    const { seen, mp } = client([{ status: 201, body: { data: record } }])
+    const request = new Request('https://site.test/_apps/x/', {
+      headers: { 'x-marcapony-identity': 'a.b.c' },
+    })
+    await mp.forRequest(request).records('menu').put('monday', { status: 'open' }, { ifVersion: 2 })
+    expect(seen[0]).toMatchObject({
+      method: 'PUT',
+      url: `${BASE}/records/menu/monday`,
+      body: { data: { status: 'open' } },
+    })
+    expect(seen[0]?.headers['x-marcapony-identity']).toBe('a.b.c')
+    expect(seen[0]?.headers['If-Match']).toBe('2')
+  })
+
+  it('answers null for a missing record and false for a missing delete', async () => {
+    const { mp } = client([failure(404, 'not_found'), failure(404, 'not_found')])
+    expect(await mp.records('menu').get('nope')).toBeNull()
+    expect(await mp.records('menu').delete('nope')).toBe(false)
+  })
+
+  it('throws PermissionDeniedError for a writer the collection does not list', async () => {
+    const { mp } = client([failure(403, 'write_not_allowed')])
+    const error = await mp
+      .records('rates')
+      .create({ code: 'USD' })
+      .catch((err: unknown) => err)
+    expect(error).toBeInstanceOf(PermissionDeniedError)
+    expect((error as MarcaponyError).code).toBe('write_not_allowed')
   })
 })

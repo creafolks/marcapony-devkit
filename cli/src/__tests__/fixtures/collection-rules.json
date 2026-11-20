@@ -1,0 +1,301 @@
+{
+  "$comment": "The platform's collection rules, as cases. The platform keeps the same cases; a change here belongs there too.",
+  "schema": [
+    {
+      "case": "customer collection",
+      "input": [
+        {
+          "name": "entries",
+          "read": "own",
+          "write": "own"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "customer collection with scope",
+      "input": [
+        {
+          "name": "entries",
+          "scope": "customer",
+          "read": "own",
+          "write": "own"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "shared public, feed",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": ["feed"]
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "shared signed_in, all writers",
+      "input": [
+        {
+          "name": "menu",
+          "scope": "shared",
+          "read": "signed_in",
+          "write": ["feed", "team", "server"]
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "shared maxRows 10000",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": ["server"],
+          "maxRows": 10000
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "customer with public read",
+      "input": [
+        {
+          "name": "entries",
+          "read": "public",
+          "write": "own"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "customer with a writer list",
+      "input": [
+        {
+          "name": "entries",
+          "read": "own",
+          "write": ["team"]
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "shared with own read",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "own",
+          "write": ["feed"]
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "shared with own write",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": "own"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "shared with no writer",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": []
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "shared with a customer writer",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": ["customer"]
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "shared with a repeated writer",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": ["feed", "feed"]
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "unknown scope",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "global",
+          "read": "public",
+          "write": ["feed"]
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "shared maxRows over 10000",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": ["feed"],
+          "maxRows": 10001
+        }
+      ],
+      "ok": false
+    }
+  ],
+  "dataAccess": [
+    {
+      "case": "customer collection, customer app",
+      "input": [
+        {
+          "name": "entries",
+          "read": "own",
+          "write": "own"
+        }
+      ],
+      "dataAccess": "customer",
+      "ok": true
+    },
+    {
+      "case": "customer collection, team app",
+      "input": [
+        {
+          "name": "entries",
+          "read": "own",
+          "write": "own"
+        }
+      ],
+      "dataAccess": "team",
+      "ok": false
+    },
+    {
+      "case": "customer collection, visitor app",
+      "input": [
+        {
+          "name": "entries",
+          "read": "own",
+          "write": "own"
+        }
+      ],
+      "dataAccess": "visitor",
+      "ok": false
+    },
+    {
+      "case": "public feed, visitor app",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": ["feed", "server"]
+        }
+      ],
+      "dataAccess": "visitor",
+      "ok": true
+    },
+    {
+      "case": "public feed, account app",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "public",
+          "write": ["feed"]
+        }
+      ],
+      "dataAccess": "account",
+      "ok": true
+    },
+    {
+      "case": "signed_in, account app",
+      "input": [
+        {
+          "name": "rates",
+          "scope": "shared",
+          "read": "signed_in",
+          "write": ["feed"]
+        }
+      ],
+      "dataAccess": "account",
+      "ok": false
+    },
+    {
+      "case": "team writer, visitor app",
+      "input": [
+        {
+          "name": "menu",
+          "scope": "shared",
+          "read": "public",
+          "write": ["team"]
+        }
+      ],
+      "dataAccess": "visitor",
+      "ok": false
+    },
+    {
+      "case": "signed_in, customer app",
+      "input": [
+        {
+          "name": "news",
+          "scope": "shared",
+          "read": "signed_in",
+          "write": ["feed", "server"]
+        }
+      ],
+      "dataAccess": "customer",
+      "ok": true
+    },
+    {
+      "case": "team writer, customer app",
+      "input": [
+        {
+          "name": "menu",
+          "scope": "shared",
+          "read": "public",
+          "write": ["team"]
+        }
+      ],
+      "dataAccess": "customer",
+      "ok": false
+    },
+    {
+      "case": "team writer, team app",
+      "input": [
+        {
+          "name": "menu",
+          "scope": "shared",
+          "read": "signed_in",
+          "write": ["team", "feed", "server"]
+        }
+      ],
+      "dataAccess": "team",
+      "ok": true
+    }
+  ]
+}

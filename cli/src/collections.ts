@@ -1,21 +1,44 @@
 /**
- * `collections` in `marcapony.json`: the records an app in the customer portal
- * keeps for each signed-in customer (`mp.forRequest(request).me.records(name)`
- * in the SDK). Checked here with the platform's rules so a mistake is reported
- * before the build; the platform checks again on deploy.
+ * `collections` in `marcapony.json`: the records an app keeps. A customer
+ * collection keeps them for each signed-in customer
+ * (`mp.forRequest(request).me.records(name)` in the SDK); a shared one keeps
+ * the app's own (`mp.records(name)`). Checked here with the platform's rules
+ * so a mistake is reported before the build; the platform checks again on
+ * deploy.
  */
 export interface CollectionDeclaration {
   /** Lower case letters, digits and underscores, starting with a letter. */
   name: string
-  /** Who may read a record. `own`: the customer it belongs to. */
-  read: 'own'
-  /** Who may write a record. `own`: the customer it belongs to. */
-  write: 'own'
-  /** Records one customer may hold in this collection. 1 to 10,000; 1,000 when omitted. */
+  /** `customer` (the default): one set of records per customer. `shared`: the app's own records. */
+  scope?: CollectionScope
+  /**
+   * Who may read a record. On a customer collection `own`: the customer it
+   * belongs to. On a shared one `public` (anyone the app serves) or
+   * `signed_in` (a signed-in person of the app's audience).
+   */
+  read: 'own' | SharedReadRule
+  /**
+   * Who may write a record. On a customer collection `own`. On a shared one a
+   * list of `feed` (an automation feed), `team` (a member of a team app) and
+   * `server` (the app's key without a signed-in person). Customers never write
+   * a shared collection.
+   */
+  write: 'own' | SharedWriter[]
+  /**
+   * Records one customer may hold in a customer collection, or the whole
+   * collection holds when shared. 1 to 10,000; 1,000 when omitted.
+   */
   maxRows?: number
   /** Top-level fields of `data` a list may filter and order by. At most 4. */
   indexes?: Array<{ field: string; type: CollectionIndexType }>
 }
+
+export const COLLECTION_SCOPES = ['customer', 'shared'] as const
+export type CollectionScope = (typeof COLLECTION_SCOPES)[number]
+export const SHARED_READ_RULES = ['public', 'signed_in'] as const
+export type SharedReadRule = (typeof SHARED_READ_RULES)[number]
+export const SHARED_WRITERS = ['feed', 'team', 'server'] as const
+export type SharedWriter = (typeof SHARED_WRITERS)[number]
 
 export const COLLECTION_INDEX_TYPES = ['string', 'number', 'date', 'boolean'] as const
 export type CollectionIndexType = (typeof COLLECTION_INDEX_TYPES)[number]
@@ -26,7 +49,7 @@ export const MAX_COLLECTION_ROWS = 10_000
 
 const NAME_PATTERN = /^[a-z][a-z0-9_]{0,47}$/
 const FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,47}$/
-const COLLECTION_KEYS = ['name', 'read', 'write', 'maxRows', 'indexes']
+const COLLECTION_KEYS = ['name', 'scope', 'read', 'write', 'maxRows', 'indexes']
 const INDEX_KEYS = ['field', 'type']
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -69,6 +92,35 @@ function indexProblems(indexes: unknown, at: string): string[] {
   return problems
 }
 
+function accessProblems(collection: Record<string, unknown>, at: string): string[] {
+  const { scope = 'customer', read, write } = collection
+  if (!COLLECTION_SCOPES.includes(scope as CollectionScope)) {
+    return [`${at}.scope must be "customer" or "shared"`]
+  }
+  if (scope === 'customer') {
+    const problems: string[] = []
+    if (read !== 'own') problems.push(`${at}.read must be "own" on a customer collection`)
+    if (write !== 'own') problems.push(`${at}.write must be "own" on a customer collection`)
+    return problems
+  }
+  const problems: string[] = []
+  if (!SHARED_READ_RULES.includes(read as SharedReadRule)) {
+    problems.push(`${at}.read must be "public" or "signed_in" on a shared collection`)
+  }
+  if (
+    !Array.isArray(write) ||
+    write.length === 0 ||
+    write.some((writer) => !SHARED_WRITERS.includes(writer as SharedWriter))
+  ) {
+    problems.push(
+      `${at}.write must list the writers of a shared collection: "feed", "team", "server"`,
+    )
+  } else if (new Set(write).size !== write.length) {
+    problems.push(`${at}.write lists a writer twice`)
+  }
+  return problems
+}
+
 /** What is wrong with a `collections` value, one line per problem; empty when it is valid or absent. */
 export function collectionProblems(collections: unknown): string[] {
   if (collections === undefined) return []
@@ -96,9 +148,7 @@ export function collectionProblems(collections: unknown): string[] {
     } else {
       names.add(collection.name)
     }
-    for (const access of ['read', 'write'] as const) {
-      if (collection[access] !== 'own') problems.push(`${at}.${access} must be "own"`)
-    }
+    problems.push(...accessProblems(collection, at))
     const { maxRows } = collection
     if (
       maxRows !== undefined &&
@@ -115,7 +165,20 @@ export function collectionProblems(collections: unknown): string[] {
 }
 
 /**
- * Collections belong to an app that serves signed-in customers. Only a value
+ * What a shared collection may say per data access: `signed_in` needs an
+ * identity, which only portal apps have, and `team` a member, which only a
+ * team app has.
+ */
+const SHARED_RULES: Record<string, { read: readonly string[]; write: readonly string[] }> = {
+  visitor: { read: ['public'], write: ['feed', 'server'] },
+  account: { read: ['public'], write: ['feed', 'server'] },
+  customer: { read: ['public', 'signed_in'], write: ['feed', 'server'] },
+  team: { read: ['public', 'signed_in'], write: ['feed', 'team', 'server'] },
+}
+
+/**
+ * A customer collection belongs to an app that serves signed-in customers; a
+ * shared one may use the rules its app's data access can serve. Only a value
  * the file states can be checked here: when `dataAccess` is omitted the stored
  * one applies, and the platform checks that.
  */
@@ -124,6 +187,30 @@ export function collectionPlacementProblem(config: {
   dataAccess?: string
 }): string | null {
   if (!Array.isArray(config.collections) || config.collections.length === 0) return null
-  if (config.dataAccess === undefined || config.dataAccess === 'customer') return null
-  return `collections keep data for signed-in customers, so the app must have "dataAccess": "customer" (it is "${config.dataAccess}")`
+  const { dataAccess } = config
+  if (dataAccess === undefined) return null
+  const rules = SHARED_RULES[dataAccess]
+  for (const collection of config.collections as unknown[]) {
+    if (!isObject(collection)) continue
+    const name = String(collection.name)
+    if ((collection.scope ?? 'customer') === 'customer') {
+      if (dataAccess !== 'customer') {
+        return `collection "${name}" keeps data for signed-in customers, so the app must have "dataAccess": "customer" (it is "${dataAccess}"). Declare it with "scope": "shared" to keep data that belongs to the app`
+      }
+      continue
+    }
+    if (!rules) continue
+    if (typeof collection.read === 'string' && !rules.read.includes(collection.read)) {
+      return `collection "${name}" may not use read "${collection.read}" in an app with "dataAccess": "${dataAccess}"`
+    }
+    if (Array.isArray(collection.write)) {
+      const writer = collection.write.find(
+        (entry: unknown) => typeof entry === 'string' && !rules.write.includes(entry),
+      )
+      if (writer !== undefined) {
+        return `collection "${name}" may not list the writer "${String(writer)}" in an app with "dataAccess": "${dataAccess}"`
+      }
+    }
+  }
+  return null
 }
