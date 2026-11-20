@@ -127,7 +127,14 @@ describe('forRequest()', () => {
     expect(seen[0]!.url).toBe(`${BASE}/me/reservations`)
     expect(seen[0]!.headers.Authorization).toBe('Bearer mpk_x')
     expect(seen[0]!.headers['x-marcapony-identity']).toBe('the.token.value')
-    expect(Object.keys(scoped)).toEqual(['kind', 'me', 'reservations', 'orders', 'customers'])
+    expect(Object.keys(scoped)).toEqual([
+      'kind',
+      'me',
+      'records',
+      'reservations',
+      'orders',
+      'customers',
+    ])
     // Not a JWS payload: no kind can be read.
     expect(scoped.kind).toBeNull()
   })

@@ -190,6 +190,29 @@ const created = await entries.create({ status: 'open', loggedAt: '2026-11-15' })
 - Do not store card data or passwords, and do not copy what the platform
   already holds.
 
+## Shared records
+
+A collection declared with `"scope": "shared"` (see the `marcapony` CLI's
+README) holds records that belong to the app, not to one customer. Read and
+write it with the same calls as `me.records`:
+
+```ts
+const rates = mp.records<{ code: string; rate: number }>('rates')
+const page = await rates.list({ index: 'code', eq: 'USD' })
+
+// As the signed-in person: a `signed_in` collection, or a team member's write.
+await mp.forRequest(request).records('menu').put('monday', { dish: 'Mercimek' })
+```
+
+- A `public` collection is readable without a signed-in person and without a
+  grant. A `signed_in` one needs `forRequest(request)` and its read grant.
+- A writer the collection does not list throws `PermissionDeniedError` with
+  code `write_not_allowed`. `maxRows` caps the whole collection
+  (`CollectionFullError`).
+- Public reads can be up to a minute old.
+- Never put personal data in a shared collection: every reader of the app sees
+  it.
+
 ## Data access
 
 Every app declares whose data it works with (`dataAccess` in `marcapony.json`,

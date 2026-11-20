@@ -1,4 +1,9 @@
-export { createClient, type MarcaponyClient, type ScopedClient } from './client.js'
+export {
+  createClient,
+  type MarcaponyClient,
+  type ScopedClient,
+  type SharedRecords,
+} from './client.js'
 export type { MarcaponyClientOptions } from './options.js'
 export type { MeClient } from './resources/me.js'
 export type { RecordCollectionClient } from './resources/records.js'
