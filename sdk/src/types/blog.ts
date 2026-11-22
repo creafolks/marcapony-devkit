@@ -65,6 +65,13 @@ export interface CreatePostInput {
   title: string
   /** HTML. Sanitized server-side. */
   content: string
+  /**
+   * The URL slug, normalized like a generated one. Omitted on create, it comes
+   * from the title. On update, a title change moves the slug only while the
+   * post is unpublished; send `slug` to rename a published post. A slug already
+   * used in that language is a `ValidationError` with `SLUG_TAKEN` on `slug`.
+   */
+  slug?: string
   excerpt?: string
   metaDescription?: string
   /** Asset id. Obtain one with `media.list` or `media.upload`. */
@@ -91,9 +98,15 @@ export interface CreatePostTranslationInput {
   locale: string
   title: string
   content: string
+  /** Generated from the content when omitted. */
   excerpt?: string
   metaDescription?: string
   tags?: string[]
+  /**
+   * Omitted, the translation keeps the original post's author; `null` leaves
+   * it without one. An author of another account is a `ValidationError`.
+   */
+  authorId?: string | null
 }
 
 export type BlogAuthorSourceType = 'platform_user' | 'portal_customer'

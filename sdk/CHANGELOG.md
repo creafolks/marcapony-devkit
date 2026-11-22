@@ -4,6 +4,15 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.11.1] - 2026-11-23
+
+### Added
+
+- `slug` on `CreatePostInput` and `UpdatePostInput`. A published post keeps its
+  slug when its title changes; send `slug` to rename it.
+- `authorId` on `CreatePostTranslationInput`. Omitted, the translation keeps
+  the original post's author.
+
 ## [0.11.0] - 2026-11-20
 
 ### Added
