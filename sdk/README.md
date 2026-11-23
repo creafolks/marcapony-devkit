@@ -131,8 +131,8 @@ await mp.forRequest(request).reservations.updateStatus(id, { status: 'approved' 
 
 | Client                       | Calls                                                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `forRequest(request).me`     | `profile.get`, `reservations.list/get/create/cancel`, `orders.list/get`, `paymentLinks.list/get`, `formSubmissions.list` (metadata only), `records(name)` |
-| `forRequest(request)` member | `reservations.list/get/create/updateStatus`, `orders.list/get`, `customers.list/get`                                                     |
+| `forRequest(request).me`     | `profile.get`, `reservations.list/get/create/cancel`, `orders.list/get`, `paymentLinks.list/get`, `formSubmissions.list` (metadata only), `records(name)`, and for a marketplace seller `products.list/get/create/update/variants/setVariants/submit/unpublish/delete` and `media.upload` |
+| `forRequest(request)` member | `reservations.list/get/create/updateStatus`, `orders.list/get`, `customers.list/get`, `products.*`, `categories.list`, `variantTypes.list` |
 
 - `identity()` is for display; the platform enforces access on every call.
   `who.can(id)` checks a permission from your `marcapony.json`, and
@@ -189,6 +189,49 @@ const created = await entries.create({ status: 'open', loggedAt: '2026-11-15' })
   the answer carries `simulated: true`.
 - Do not store card data or passwords, and do not copy what the platform
   already holds.
+
+## Marketplace sellers
+
+On a package with the portal marketplace, the owner can let some customers
+sell their own products through a portal app. The app declares a permission
+whose grants are `products.own.read` and `products.own.write`; the owner gives
+it to a portal role (a seller role they assign; a role customers pick at sign-up
+is refused) on the app's page in the dashboard.
+
+```ts
+const me = mp.forRequest(request).me
+const image = await me.media.upload(file, { fileName: file.name }) // a File or Blob carries its type
+const draft = await me.products.create({ name: 'Kupa', price: 120, imageIds: [image.id] })
+await me.products.submit(draft.id)
+```
+
+- Products start as drafts in the account's default language. `submit` sends
+  one to the owner's team, which approves it before it goes live; when the
+  owner turned review off, `submit` publishes at once. Show the seller
+  `reviewStatus` (`pending`, `approved`, `rejected`) and `reviewNote`.
+  Editing a draft that waits for the team withdraws it (`reviewStatus`
+  becomes null), so the team never approves a version it did not see;
+  `submit` again when the edit is done.
+- An `update` of a live product under review applies `stock` and `trackStock`
+  at once and holds the other fields in `pendingChanges`; the live version
+  keeps selling until the team approves. `setVariants` on such a product
+  answers `{ heldForReview: true }`. `unpublish` takes a product off the site
+  and makes a waiting edit part of the draft.
+- A seller sets only the fields of `SellerProductInput`: status, slug, tags and
+  language are refused. Description and detail HTML is cleaned to a safe set
+  of tags. `imageIds` takes only images the seller uploaded, and a tenant that
+  limits sellers to some categories needs one of them as `categoryId`.
+- `media.upload(bytes, { contentType })` sends the raw image (jpeg, png, webp,
+  gif or avif, at most 10 MB). Pass an `idempotencyKey` to make it safe to
+  retry; without one it is sent exactly once. A seller may keep 50 uploaded
+  images that no product uses yet.
+- A seller deletes only a product that is not live. Another seller's product,
+  or one of the team's, answers 404. Writes count toward the owner's
+  per-seller and account product limits (`TierLimitError`).
+- In test mode the product writes are simulated: they answer with a simulated
+  record whose id does not exist, so a later call on it (such as `submit`
+  after `create`) answers 404. Image uploads are real in test mode. Try the
+  whole flow on a live environment.
 
 ## Shared records
 

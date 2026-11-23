@@ -16,6 +16,11 @@ export interface RequestArgs {
   path: ApiPath
   query?: object
   body?: unknown
+  /**
+   * Bytes sent as they are, with their own content type, instead of a JSON
+   * `body`. Must have a known length (no streams), so a retry can send it again.
+   */
+  rawBody?: { data: ArrayBuffer | Uint8Array | Blob; contentType: string }
   /** Headers of this one request, such as a precondition. */
   headers?: Record<string, string>
   idempotencyKey?: string
@@ -93,12 +98,17 @@ export class Transport {
       Authorization: `Bearer ${this.options.apiKey}`,
       Accept: accept,
     }
-    if (args.body !== undefined) headers['Content-Type'] = 'application/json'
+    if (args.rawBody) headers['Content-Type'] = args.rawBody.contentType
+    else if (args.body !== undefined) headers['Content-Type'] = 'application/json'
     if (args.idempotencyKey) headers['Idempotency-Key'] = args.idempotencyKey
     return {
       method: args.method,
       headers,
-      body: args.body !== undefined ? JSON.stringify(args.body) : undefined,
+      body: args.rawBody
+        ? (args.rawBody.data as BodyInit)
+        : args.body !== undefined
+          ? JSON.stringify(args.body)
+          : undefined,
     }
   }
 

@@ -57,9 +57,13 @@ export interface MarcaponyConfig {
    * dashboard. `grants` names platform permissions (customer apps:
    * `reservations.own.read`, `reservations.own.create`, `reservations.own.cancel`,
    * `orders.own.read`, `profile.own.read`, `payment-links.own.read`,
-   * `forms.own.read`, `records.own.read`, `records.own.write`; team tools: `reservations.read`, `reservations.write`,
-   * `orders.read`, `customers.read`) or is empty for a permission only the app
-   * interprets.
+   * `forms.own.read`, `records.own.read`, `records.own.write`,
+   * `records.shared.read`, and for marketplace sellers `products.own.read`,
+   * `products.own.write`, which the owner can only give to a portal role;
+   * team tools: `reservations.read`, `reservations.write`, `orders.read`,
+   * `customers.read`, `products.read`, `products.write`,
+   * `records.shared.team.read`, `records.shared.team.write`) or is empty for a
+   * permission only the app interprets.
    */
   permissions?: Array<{ id: string; label: string; grants?: string[] }>
   /**

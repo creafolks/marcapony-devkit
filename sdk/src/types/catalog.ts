@@ -15,6 +15,13 @@ export type ProductCreatedVia =
   | 'super'
   | 'portal'
 
+/**
+ * A marketplace seller's product under the team's review: `pending` while the
+ * team decides (a new product, or an edit of a live one), then `approved` or
+ * `rejected`. Null for the team's own products.
+ */
+export type ProductReviewStatus = 'pending' | 'approved' | 'rejected'
+
 export interface Product {
   id: string
   name: string
@@ -42,6 +49,8 @@ export interface Product {
   createdVia?: ProductCreatedVia
   createdByCustomerId?: string | null
   createdByAppId?: string | null
+  /** Seller products only, for an app that manages products. */
+  reviewStatus?: ProductReviewStatus | null
   createdAt: string
   updatedAt: string
 }
@@ -157,4 +166,70 @@ export interface HighlightedProduct {
   categoryId: string | null
   highlightOrder: number
   product: Record<string, unknown> | null
+}
+
+/**
+ * A product the signed-in seller created, from `me.products` (portal
+ * marketplace). Carries the review state the seller needs to see.
+ */
+export interface SellerProduct extends Product {
+  brand: string | null
+  gtin: string | null
+  condition: 'new' | 'used' | 'refurbished' | null
+  weight: number | null
+  dimensions: { width?: number; height?: number; length?: number } | null
+  details: { title: string; value: string }[]
+  reviewStatus: ProductReviewStatus | null
+  /** The team's note with a rejection. */
+  reviewNote: string | null
+  /**
+   * An edit of a live product waiting for the team: the fields you changed,
+   * and `variants` when you replaced the variations. The live product keeps
+   * selling as it was until the team approves.
+   */
+  pendingChanges: Record<string, unknown> | null
+}
+
+/**
+ * What a seller may set. Status, slug, tags and language are the platform's:
+ * a product starts as a draft in the account's default language and goes live
+ * through `submit`. Rich text is cleaned to a safe set of tags.
+ */
+export interface SellerProductInput {
+  name: string
+  /** HTML; scripts, event handlers and unknown tags are removed. */
+  description?: string
+  details?: { title: string; value: string }[]
+  price?: number
+  salePrice?: number
+  currency?: string | null
+  stock?: number
+  trackStock?: boolean
+  sku?: string | null
+  brand?: string | null
+  gtin?: string | null
+  condition?: 'new' | 'used' | 'refurbished'
+  weight?: number
+  dimensions?: { width?: number; height?: number; length?: number } | null
+  /** Images you uploaded with `me.media.upload`; other assets are refused. */
+  imageIds?: string[]
+  /** Required when the tenant limits sellers to some categories. */
+  categoryId?: string | null
+}
+
+/** Every field optional: a field you leave out keeps its value. */
+export type UpdateSellerProductInput = Partial<SellerProductInput>
+
+export interface ListSellerProductsParams {
+  page?: number
+  perPage?: number
+  status?: ProductStatus
+  search?: string
+}
+
+/** `setVariants` on a live product while the team reviews edits: the set waits for approval. */
+export interface HeldVariantsResult {
+  id: string
+  reviewStatus: 'pending'
+  heldForReview: true
 }

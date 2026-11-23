@@ -372,7 +372,7 @@ settings. `npx marcapony app link` writes it for a new project, and
 | `env`                | no       | Settings and secrets the app needs: `{ "NAME": { "secret", "required", "description" } }` |
 | `placement`          | no       | `portal` (behind the customer portal login) or `public`                         |
 | `dataAccess`         | no       | Whose data the app works with: `account`, `visitor`, `customer` or `team`       |
-| `permissions`        | no       | Permissions the app offers (`id`, `label`, `grants`); the owner assigns them    |
+| `permissions`        | no       | Permissions the app offers (`id`, `label`, `grants`); the owner assigns them (seller grants `products.own.*` only to a portal role) |
 | `portal`             | no       | Portal menu entry: `title`, `icon`, `sortOrder`                                 |
 | `collections`        | no       | Records the app keeps, per signed-in customer or shared; see below              |
 
