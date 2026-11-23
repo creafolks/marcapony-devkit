@@ -209,6 +209,9 @@ await me.products.submit(draft.id)
   one to the owner's team, which approves it before it goes live; when the
   owner turned review off, `submit` publishes at once. Show the seller
   `reviewStatus` (`pending`, `approved`, `rejected`) and `reviewNote`.
+  Editing a draft that waits for the team withdraws it (`reviewStatus`
+  becomes null), so the team never approves a version it did not see;
+  `submit` again when the edit is done.
 - An `update` of a live product under review applies `stock` and `trackStock`
   at once and holds the other fields in `pendingChanges`; the live version
   keeps selling until the team approves. `setVariants` on such a product
