@@ -267,6 +267,19 @@ describe('product management', () => {
   })
 })
 
+describe('product management for a team member', () => {
+  it('sends the member identity with product calls', async () => {
+    const { fetch, calls } = makeFetch([jsonResponse({ data: { id: 'p1' } }, 201)])
+    const mp = createClient({ apiKey: KEY, baseUrl: 'https://x.test/ext/v1', fetch })
+    const request = new Request('https://app.test/', {
+      headers: { 'x-marcapony-identity': 'token-1' },
+    })
+    await mp.forRequest(request).products.create({ name: 'Kupa' })
+    expect(calls[0]?.url).toBe('https://x.test/ext/v1/products')
+    expect(new Headers(calls[0]?.init.headers).get('x-marcapony-identity')).toBe('token-1')
+  })
+})
+
 describe('blog and media resources', () => {
   it('addresses each post operation at the path the surface publishes', async () => {
     const { fetch, calls } = makeFetch([

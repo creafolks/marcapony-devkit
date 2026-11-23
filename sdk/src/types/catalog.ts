@@ -57,8 +57,10 @@ export interface ListProductsParams {
   locale?: string
   stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock'
   /**
-   * The next three only for an app that manages products; any other app gets
-   * 403 `permission_denied`. Without `status` such an app lists every status.
+   * The next three only for an app that manages products (an `account` app
+   * with `products:write`, or a team member with the `products.write` grant);
+   * any other app gets 403 `permission_denied`. Without `status` such an app
+   * lists every status.
    */
   status?: ProductStatus
   createdVia?: ProductCreatedVia
@@ -114,9 +116,12 @@ export interface ProductVariant {
   isActive: boolean
 }
 
+/**
+ * A combination is identified by its set of `valueIds`: changing its price,
+ * stock or sku keeps its id and order history; changing its values makes a
+ * new combination.
+ */
 export interface ProductVariantInput {
-  /** Keep an existing combination's id (and its order history) while changing it. */
-  productVariantId?: string
   /** One value id per axis, from `variantTypes.list()`. */
   valueIds: string[]
   price?: number | null

@@ -134,6 +134,9 @@ describe('forRequest()', () => {
       'reservations',
       'orders',
       'customers',
+      'products',
+      'categories',
+      'variantTypes',
     ])
     // Not a JWS payload: no kind can be read.
     expect(scoped.kind).toBeNull()

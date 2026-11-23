@@ -19,6 +19,9 @@ minor release may contain breaking changes; each one is listed below.
 - `sku` and `tags` on `Product`, and `createdVia`, `createdByCustomerId` and
   `createdByAppId` for an app that manages products.
 - `ProductStatus` (`Draft`, `Published`, `Archived`).
+- `forRequest(request).products`, `.categories` and `.variantTypes` for a team
+  member: a team app manages products with the member's own role, through
+  the `products.read` and `products.write` grants.
 
 ## [0.11.1] - 2026-11-23
 

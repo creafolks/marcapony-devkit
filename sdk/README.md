@@ -229,7 +229,10 @@ A deploy can only narrow it; widening is done in the dashboard.
 
 ## Managing products
 
-An `account` app with the `products:write` scope manages the catalog:
+An `account` app with the `products:write` scope manages the catalog. So
+does a team app, through `mp.forRequest(request)`, for a member given a
+permission with the `products.write` grant (and `products.read` to list); the
+member acts with their own role.
 
 ```ts
 const draft = await mp.products.create({ name: 'Mug', price: 120, currency: 'TRY' })
@@ -248,8 +251,9 @@ await mp.products.publish(draft.id)
   `mp.variantTypes.list()`, then set the whole list of combinations with
   `mp.products.setVariants(id, { combinations })`. A combination you leave
   out is removed, so start from `mp.products.variants(id)`.
-- A write runs with the role and category limit of the person who created the
-  app's key, and creates count toward the account's product limit.
+- A write runs with the role and category limit of the member on a team app,
+  else of the person who created the app's key, and creates count toward the
+  account's product limit.
 
 ## Characters
 
