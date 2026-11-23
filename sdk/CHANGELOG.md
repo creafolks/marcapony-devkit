@@ -4,6 +4,22 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.13.0] - 2026-11-23
+
+### Added
+
+- Marketplace sellers: `forRequest(request).me.products` (`list`, `get`,
+  `create`, `update`, `variants`, `setVariants`, `submit`, `unpublish`,
+  `delete`) and `me.media.upload(bytes, options)`, through the
+  `products.own.read` and `products.own.write` grants.
+- `SellerProduct`, `SellerProductInput`, `UpdateSellerProductInput`,
+  `ListSellerProductsParams`, `HeldVariantsResult`, `SellerImage`,
+  `SellerImageUploadOptions`, `SellerImageType`, `SELLER_IMAGE_MAX_BYTES` and
+  `ProductReviewStatus`.
+- `reviewStatus` on `Product` for an app that manages products.
+- The transport sends raw bytes with their own content type; such a request is
+  retried only with an idempotency key, like any other write.
+
 ## [0.12.0] - 2026-11-23
 
 ### Added

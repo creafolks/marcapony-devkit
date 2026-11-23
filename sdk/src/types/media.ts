@@ -28,3 +28,25 @@ export interface ImportAssetInput {
   fileName?: string
   folderId?: string
 }
+
+/** The image types `me.media.upload` takes. */
+export type SellerImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif'
+
+/** The largest image `me.media.upload` takes, in bytes (10 MB). */
+export const SELLER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+
+export interface SellerImageUploadOptions {
+  /** Required unless `data` is a Blob or File that carries its type. */
+  contentType?: SellerImageType
+  /** Shown in the tenant's media library; the extension is taken from the type. */
+  fileName?: string
+  /** Makes the upload safe to retry; without one it is sent exactly once. */
+  idempotencyKey?: string
+}
+
+/** An image a seller uploaded, ready for `imageIds`. */
+export interface SellerImage {
+  id: string
+  name: string
+  mimeType: string
+}
