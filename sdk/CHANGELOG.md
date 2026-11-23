@@ -14,6 +14,13 @@ minor release may contain breaking changes; each one is listed below.
   the original post's author.
 - `imageId` and `categoryIds` on `CreatePostTranslationInput`. Omitted, the
   translation uses the original's cover image and has no categories.
+- `translations` on `BlogAuthor`, `CreateBlogAuthorInput` and
+  `UpdateBlogAuthorInput`: the author's title and bio per locale.
+
+### Changed
+
+- `UpdatePostInput.imageId`, the event fields and
+  `UpdateBlogCategoryInput.description` accept `null`, which clears them.
 
 ## [0.11.0] - 2026-11-20
 

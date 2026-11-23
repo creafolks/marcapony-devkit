@@ -88,13 +88,20 @@ export interface CreatePostInput {
   showReadingTime?: boolean
   allowComments?: boolean
   postKind?: PostKind
-  /** Wall-clock, no time zone. See `Post.eventStartAt`. */
-  eventStartAt?: string
-  eventEndAt?: string
-  eventLocation?: string
+  /**
+   * Wall-clock, no time zone. See `Post.eventStartAt`. `null` clears the
+   * field, which is how an event goes back to being an article.
+   */
+  eventStartAt?: string | null
+  eventEndAt?: string | null
+  /** At most 200 characters. */
+  eventLocation?: string | null
 }
 
-export type UpdatePostInput = CreatePostInput
+export type UpdatePostInput = Omit<CreatePostInput, 'imageId'> & {
+  /** Asset id. `null` removes the cover image. */
+  imageId?: string | null
+}
 
 export interface CreatePostTranslationInput {
   locale: string
@@ -127,6 +134,8 @@ export interface BlogAuthor {
   socialLinks: Record<string, string>
   sourceType: BlogAuthorSourceType
   isActive: boolean
+  /** Title and bio in each of the site's other languages, keyed by locale. */
+  translations?: Record<string, { title: string | null; bio: string | null }>
   createdAt: string
   updatedAt: string
 }
@@ -142,6 +151,12 @@ export interface CreateBlogAuthorInput {
   avatarUrl?: string | null
   socialLinks?: Record<string, string>
   isActive?: boolean
+  /**
+   * Title and bio per locale. Only the locales sent are written; a locale with
+   * both empty falls back to the base title and bio. An entry for the site's
+   * default locale writes the base fields.
+   */
+  translations?: Record<string, { title?: string | null; bio?: string | null }>
 }
 
 /** `sourceType` and `sourceId` identify who the profile is for and cannot change. */
@@ -169,7 +184,10 @@ export interface CreateBlogCategoryInput {
   sortOrder?: number
 }
 
-export type UpdateBlogCategoryInput = Partial<CreateBlogCategoryInput>
+export type UpdateBlogCategoryInput = Omit<Partial<CreateBlogCategoryInput>, 'description'> & {
+  /** `null` clears the description. */
+  description?: string | null
+}
 
 export interface CreateBlogCategoryTranslationInput {
   locale: string
