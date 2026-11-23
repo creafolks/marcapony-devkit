@@ -14,6 +14,7 @@ export type {
   CategoriesResource,
   HighlightedProductsResource,
   ProductsResource,
+  VariantTypesResource,
 } from './resources/catalog.js'
 export type { CustomersResource } from './resources/customers.js'
 export type { FormSubmissionsResource } from './resources/form-submissions.js'

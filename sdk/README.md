@@ -227,6 +227,30 @@ set in the dashboard):
 
 A deploy can only narrow it; widening is done in the dashboard.
 
+## Managing products
+
+An `account` app with the `products:write` scope manages the catalog:
+
+```ts
+const draft = await mp.products.create({ name: 'Mug', price: 120, currency: 'TRY' })
+await mp.products.update(draft.id, { stock: 12, trackStock: true })
+await mp.products.publish(draft.id)
+```
+
+- `create` makes a draft in the account's default language. Publishing is its
+  own call, `publish` / `unpublish`; `status` in a payload is a 400.
+- `update` changes only the fields you send. Send `[]` to clear a list such as
+  `tags`.
+- Such an app also reads drafts and archived products, filters `list` by
+  `status`, `createdVia` and `createdByCustomerId`, and sees where each product
+  came from. Every other app sees published products only.
+- Variants (with the variants plugin): read the axes with
+  `mp.variantTypes.list()`, then set the whole list of combinations with
+  `mp.products.setVariants(id, { combinations })`. A combination you leave
+  out is removed, so start from `mp.products.variants(id)`.
+- A write runs with the role and category limit of the person who created the
+  app's key, and creates count toward the account's product limit.
+
 ## Characters
 
 An app or a game can talk to the account's characters from its server. The
