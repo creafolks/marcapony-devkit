@@ -128,7 +128,9 @@ export interface ProductVariantInput {
   stock?: number | null
   sku?: string | null
   imageId?: string | null
+  /** Omitted means `false`, not "unchanged": send it on every call for the default combination. */
   isDefault?: boolean
+  /** Omitted means `true`, so a combination you send again is active again. */
   isActive?: boolean
 }
 
