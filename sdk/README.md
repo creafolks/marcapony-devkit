@@ -228,7 +228,10 @@ await me.products.submit(draft.id)
 - A seller deletes only a product that is not live. Another seller's product,
   or one of the team's, answers 404. Writes count toward the owner's
   per-seller and account product limits (`TierLimitError`).
-- These writes are real in test mode.
+- In test mode the product writes are simulated: they answer with a simulated
+  record whose id does not exist, so a later call on it (such as `submit`
+  after `create`) answers 404. Image uploads are real in test mode. Try the
+  whole flow on a live environment.
 
 ## Shared records
 
