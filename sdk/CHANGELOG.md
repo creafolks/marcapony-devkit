@@ -4,6 +4,25 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.12.0] - 2026-11-23
+
+### Added
+
+- Product management for an `account` app with the `products:write` scope:
+  `products.create`, `products.update` (partial), `products.publish`,
+  `products.unpublish` and `products.delete`.
+- Variants: `products.variants(id)`, `products.setVariants(id, { combinations })`
+  and `variantTypes.list()`. They need the variants plugin.
+- `products.list` filters: `categoryId`, `search`, `locale`, `stockStatus`,
+  and, for an app that manages products, `status`, `createdVia` and
+  `createdByCustomerId`.
+- `sku` and `tags` on `Product`, and `createdVia`, `createdByCustomerId` and
+  `createdByAppId` for an app that manages products.
+- `ProductStatus` (`Draft`, `Published`, `Archived`).
+- `forRequest(request).products`, `.categories` and `.variantTypes` for a team
+  member: a team app manages products with the member's own role, through
+  the `products.read` and `products.write` grants.
+
 ## [0.11.1] - 2026-11-23
 
 ### Added

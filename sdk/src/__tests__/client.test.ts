@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { createClient } from '../index'
+import { createClient, ProductStatus } from '../index'
 import {
   InsufficientScopeError,
   NotFoundError,
@@ -224,6 +224,59 @@ describe('createClient', () => {
     } finally {
       delete g.window
     }
+  })
+})
+
+describe('product management', () => {
+  it('addresses each product operation at the path the surface publishes', async () => {
+    const { fetch, calls } = makeFetch([
+      jsonResponse({ data: [], meta: { page: 1, perPage: 50, total: 0 } }),
+      jsonResponse({ data: { id: 'p1' } }, 201),
+      jsonResponse({ data: { id: 'p1' } }),
+      jsonResponse({ data: { id: 'p1' } }),
+      jsonResponse({ data: { id: 'p1' } }),
+      jsonResponse({ data: [] }),
+      jsonResponse({ data: [] }),
+      jsonResponse({ data: [] }),
+      jsonResponse({ data: { id: 'p1', deleted: true } }),
+    ])
+    const mp = createClient({ apiKey: KEY, baseUrl: 'https://x.test/ext/v1', fetch })
+
+    await mp.products.list({ status: ProductStatus.Draft, createdVia: 'sdk', search: 'kupa' })
+    await mp.products.create({ name: 'Kupa', price: 120 }, { idempotencyKey: 'k-1' })
+    await mp.products.update('p1', { stock: 4 })
+    await mp.products.publish('p1')
+    await mp.products.unpublish('p1')
+    await mp.products.variants('p1')
+    await mp.products.setVariants('p1', { combinations: [{ valueIds: ['v1'], price: 10 }] })
+    await mp.variantTypes.list()
+    await mp.products.delete('p1')
+
+    expect(calls[0]?.url).toBe('https://x.test/ext/v1/products?status=1&createdVia=sdk&search=kupa')
+    expect(calls[1]?.init.method).toBe('POST')
+    expect(calls[1]?.url).toBe('https://x.test/ext/v1/products')
+    expect(calls[2]?.init.method).toBe('PATCH')
+    expect(calls[2]?.init.body).toBe(JSON.stringify({ stock: 4 }))
+    expect(calls[3]?.url).toBe('https://x.test/ext/v1/products/p1/publish')
+    expect(calls[4]?.url).toBe('https://x.test/ext/v1/products/p1/unpublish')
+    expect(calls[5]?.url).toBe('https://x.test/ext/v1/products/p1/variants')
+    expect(calls[6]?.init.method).toBe('PUT')
+    expect(calls[6]?.url).toBe('https://x.test/ext/v1/products/p1/variants')
+    expect(calls[7]?.url).toBe('https://x.test/ext/v1/variant-types')
+    expect(calls[8]?.init.method).toBe('DELETE')
+  })
+})
+
+describe('product management for a team member', () => {
+  it('sends the member identity with product calls', async () => {
+    const { fetch, calls } = makeFetch([jsonResponse({ data: { id: 'p1' } }, 201)])
+    const mp = createClient({ apiKey: KEY, baseUrl: 'https://x.test/ext/v1', fetch })
+    const request = new Request('https://app.test/', {
+      headers: { 'x-marcapony-identity': 'token-1' },
+    })
+    await mp.forRequest(request).products.create({ name: 'Kupa' })
+    expect(calls[0]?.url).toBe('https://x.test/ext/v1/products')
+    expect(new Headers(calls[0]?.init.headers).get('x-marcapony-identity')).toBe('token-1')
   })
 })
 

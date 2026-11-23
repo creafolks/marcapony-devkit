@@ -9,9 +9,11 @@ import {
   categoriesResource,
   highlightedProductsResource,
   productsResource,
+  variantTypesResource,
   type CategoriesResource,
   type HighlightedProductsResource,
   type ProductsResource,
+  type VariantTypesResource,
 } from './resources/catalog.js'
 import { customersResource, type CustomersResource } from './resources/customers.js'
 import {
@@ -80,6 +82,7 @@ export interface MarcaponyClient {
   products: ProductsResource
   categories: CategoriesResource
   highlightedProducts: HighlightedProductsResource
+  variantTypes: VariantTypesResource
   customers: CustomersResource
   reservations: ReservationsResource
   availabilityBlocks: AvailabilityBlocksResource
@@ -148,6 +151,7 @@ export function createClient(options: MarcaponyClientOptions): MarcaponyClient {
     products: productsResource(t),
     categories: categoriesResource(t),
     highlightedProducts: highlightedProductsResource(t),
+    variantTypes: variantTypesResource(t),
     customers: customersResource(t),
     reservations: reservationsResource(t),
     availabilityBlocks: availabilityBlocksResource(t),
