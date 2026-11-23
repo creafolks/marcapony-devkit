@@ -68,8 +68,10 @@ export interface CreatePostInput {
   /**
    * The URL slug, normalized like a generated one. Omitted on create, it comes
    * from the title. On update, a title change moves the slug only while the
-   * post is unpublished; send `slug` to rename a published post. A slug already
-   * used in that language is a `ValidationError` with `SLUG_TAKEN` on `slug`.
+   * post is unpublished; send `slug` to rename a published post. At most 200
+   * characters. A slug already used in that language is a `ValidationError`
+   * with `SLUG_TAKEN` on `slug`; one that normalizes to nothing (only
+   * punctuation, for example) is a `ValidationError` with `SLUG_INVALID`.
    */
   slug?: string
   excerpt?: string
@@ -98,10 +100,14 @@ export interface CreatePostTranslationInput {
   locale: string
   title: string
   content: string
-  /** Generated from the content when omitted. */
+  /** At most 500 characters. Generated from the content when omitted. */
   excerpt?: string
   metaDescription?: string
   tags?: string[]
+  /** Asset id. Omitted, the translation uses the original post's cover image. */
+  imageId?: string
+  /** Omitted, the translation has no categories. */
+  categoryIds?: string[]
   /**
    * Omitted, the translation keeps the original post's author; `null` leaves
    * it without one. An author of another account is a `ValidationError`.
