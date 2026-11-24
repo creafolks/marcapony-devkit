@@ -37,6 +37,9 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export function followPortalTheme(root: HTMLElement = document.documentElement): void {
   if (window.parent === window) return
 
+  // A theme can leave out values the portal could not read: drop what the
+  // previous one set and this one omits, so the default from styles.css returns.
+  let applied: string[] = []
   window.addEventListener('message', (event) => {
     if (event.source !== window.parent) return
     const message = asRecord(event.data)
@@ -44,17 +47,23 @@ export function followPortalTheme(root: HTMLElement = document.documentElement):
     const theme = asRecord(message?.theme)
     if (!theme) return
 
+    const next = new Map<string, string>()
     const colors = asRecord(theme.colors) ?? {}
     for (const [key, variable] of COLORS) {
       const value = colors[key]
-      if (typeof value === 'string' && RGB.test(value)) root.style.setProperty(variable, value)
+      if (typeof value === 'string' && RGB.test(value)) next.set(variable, value)
     }
     if (typeof theme.radius === 'string' && RADIUS.test(theme.radius)) {
-      root.style.setProperty('--radius', theme.radius)
+      next.set('--radius', theme.radius)
     }
     if (typeof theme.fontFamily === 'string' && FONT_STACK.test(theme.fontFamily)) {
-      root.style.setProperty('--font-sans', theme.fontFamily)
+      next.set('--font-sans', theme.fontFamily)
     }
+    for (const name of applied) {
+      if (!next.has(name)) root.style.removeProperty(name)
+    }
+    for (const [name, value] of next) root.style.setProperty(name, value)
+    applied = [...next.keys()]
     const dark = theme.appearance === 'dark'
     root.dataset.appearance = dark ? 'dark' : 'light'
     root.style.colorScheme = dark ? 'dark' : 'light'

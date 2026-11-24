@@ -38,11 +38,11 @@ the owner previews the tool, a banner says that changes are simulated.
 3. Test it on the deployed app: locally nobody is signed in, so `/api/me`
    answers 401.
 
-The app follows the portal's look on its own: `src/ui/portal-theme.ts` receives
-the portal's colours, radius and font (light or dark) and `src/ui/styles.css`
-reads them as CSS variables. Style with those variables, not fixed colours, and
-leave the screen without an outer card or border: the portal shows the app full
-width, with no frame around it.
+`src/ui/styles.css` styles the app with theme variables. Team members open
+this tool from the Marcapony dashboard, which sends no theme, so the defaults
+in `styles.css` apply (light or dark from the device). If you also show the app
+in the customer portal, `src/ui/portal-theme.ts` picks up the portal's colours
+there. Style with the variables, not fixed colours.
 
 ## Develop and publish
 
