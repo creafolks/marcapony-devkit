@@ -1,33 +1,59 @@
 :root {
   color-scheme: light dark;
-  font-family:
+  /* Theme tokens. Inside the customer portal, portal-theme.ts replaces them
+     with the portal's own colours, radius and font (light or dark). Style with
+     these variables, never fixed colours, so the app follows the portal. */
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --destructive: #b91c1c;
+  --border: #e4e4e7;
+  --ring: #18181b;
+  --radius: 0.5rem;
+  --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  --border: #d4d4d8;
-  --muted: #52525b;
   --notice: #fef3c7;
   --notice-text: #78350f;
-  --error: #b91c1c;
+  font-family: var(--font-sans);
+  line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-appearance='light']) {
+    --background: #09090b;
+    --foreground: #fafafa;
+    --card: #09090b;
+    --primary: #fafafa;
+    --primary-foreground: #18181b;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --destructive: #fca5a5;
     --border: #3f3f46;
-    --muted: #a1a1aa;
+    --ring: #d4d4d8;
     --notice: #422006;
     --notice-text: #fde68a;
-    --error: #fca5a5;
   }
+}
+
+:root[data-appearance='dark'] {
+  --notice: #422006;
+  --notice-text: #fde68a;
 }
 
 body {
   margin: 0;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 main {
   max-width: 42rem;
   margin: 0 auto;
-  padding: 3rem 1.5rem;
+  padding: 2rem 1.5rem 3rem;
 }
 
 h1 {
@@ -57,8 +83,36 @@ textarea {
 }
 
 button {
-  padding: 0.25rem 0.75rem;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
   cursor: pointer;
+}
+
+button[type='submit'] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+input,
+select,
+textarea {
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
 }
 
 button:disabled {
@@ -78,18 +132,18 @@ label > textarea {
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .error {
-  color: var(--error);
+  color: var(--destructive);
 }
 
 .notice {
   background: var(--notice);
   color: var(--notice-text);
   padding: 0.5rem 0.75rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius);
 }
 
 .rows {

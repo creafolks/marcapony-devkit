@@ -37,6 +37,12 @@ changes are simulated.
 3. Test sign-in flows on the deployed app: locally nobody is signed in, so
    `/api/me` answers 401.
 
+The app follows the portal's look on its own: `src/ui/portal-theme.ts` receives
+the portal's colours, radius and font (light or dark) and `src/ui/styles.css`
+reads them as CSS variables. Style with those variables, not fixed colours, and
+leave the screen without an outer card or border: the portal shows the app full
+width, with no frame around it.
+
 ## Develop and publish
 
 Requires [Bun](https://bun.sh).

@@ -38,6 +38,12 @@ the owner previews the tool, a banner says that changes are simulated.
 3. Test it on the deployed app: locally nobody is signed in, so `/api/me`
    answers 401.
 
+`src/ui/styles.css` styles the app with theme variables. Team members open
+this tool from the Marcapony dashboard, which sends no theme, so the defaults
+in `styles.css` apply (light or dark from the device). If you also show the app
+in the customer portal, `src/ui/portal-theme.ts` picks up the portal's colours
+there. Style with the variables, not fixed colours.
+
 ## Develop and publish
 
 Requires [Bun](https://bun.sh).
