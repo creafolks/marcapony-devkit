@@ -253,6 +253,11 @@ await mp.forRequest(request).records('menu').put('monday', { dish: 'Mercimek' })
   code `write_not_allowed`. `maxRows` caps the whole collection
   (`CollectionFullError`).
 - Public reads can be up to a minute old.
+- On a collection an automation feed writes (`"feed"` in `write`), the page
+  `meta` from `list()` also carries `lastFedAt` (ISO time of the last
+  successful refresh, or null) and `lastFeedStatus` (`ok`, or the reason the
+  last run failed). Use `lastFedAt` for a "last updated" line. Customer
+  collections never carry these fields.
 - Never put personal data in a shared collection: every reader of the app sees
   it.
 
