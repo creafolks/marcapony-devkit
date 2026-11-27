@@ -4,6 +4,14 @@ All notable changes to `marcapony-sdk` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The SDK is 0.x, so a
 minor release may contain breaking changes; each one is listed below.
 
+## [0.13.1] - 2026-11-27
+
+### Added
+
+- `meta.lastFedAt` and `meta.lastFeedStatus` on a shared collection's list
+  page, filled when an automation feed writes the collection. The page meta
+  type is exported as `RecordPageMeta`.
+
 ## [0.13.0] - 2026-11-23
 
 ### Added

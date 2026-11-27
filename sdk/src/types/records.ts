@@ -23,7 +23,19 @@ export type RecordWriteResult<T extends RecordData = RecordData> = AppRecord<T> 
 /** One page of records. Pass `meta.nextCursor` back as `cursor`; null means the end. */
 export interface RecordPage<T extends RecordData = RecordData> {
   data: Array<AppRecord<T>>
-  meta: { nextCursor: string | null }
+  meta: RecordPageMeta
+}
+
+export interface RecordPageMeta {
+  nextCursor: string | null
+  /**
+   * Shared collections only: when an automation feed last wrote this
+   * collection (ISO time), or null if no feed has written it yet. Use it for a
+   * "last updated" line.
+   */
+  lastFedAt?: string | null
+  /** Shared collections only: `ok`, or the reason the last feed run failed. */
+  lastFeedStatus?: string | null
 }
 
 /**
