@@ -169,6 +169,13 @@ describe('records (shared collections)', () => {
     expect(seen[0]?.headers['x-marcapony-identity']).toBeUndefined()
   })
 
+  it('passes the last feed refresh through the page meta', async () => {
+    const meta = { nextCursor: null, lastFedAt: '2026-11-27T06:00:00.000Z', lastFeedStatus: 'ok' }
+    const { mp } = client([{ body: { data: [record], meta } }])
+    const page = await mp.records<Entry>('rates').list()
+    expect(page.meta).toEqual(meta)
+  })
+
   it('writes as the signed-in member through forRequest', async () => {
     const { seen, mp } = client([{ status: 201, body: { data: record } }])
     const request = new Request('https://site.test/_apps/x/', {
