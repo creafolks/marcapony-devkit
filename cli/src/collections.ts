@@ -33,6 +33,23 @@ export interface CollectionDeclaration {
   indexes?: Array<{ field: string; type: CollectionIndexType }>
 }
 
+/**
+ * A reference to a collection the account defines in the dashboard (Veriler):
+ * data that belongs to the business, shared by every app and automation. The
+ * app reads or writes it under `as` (or its own name) with `mp.records(name)`.
+ * The platform checks on deploy that it exists, that the app's audience may
+ * read it, and that a write was approved.
+ */
+export interface CollectionReference {
+  name: string
+  from: 'account'
+  access: 'read' | 'write'
+  /** The name the app code uses; defaults to `name`. */
+  as?: string
+}
+
+export type CollectionEntry = CollectionDeclaration | CollectionReference
+
 export const COLLECTION_SCOPES = ['customer', 'shared'] as const
 export type CollectionScope = (typeof COLLECTION_SCOPES)[number]
 export const SHARED_READ_RULES = ['public', 'signed_in'] as const
@@ -50,6 +67,9 @@ export const MAX_COLLECTION_ROWS = 10_000
 const NAME_PATTERN = /^[a-z][a-z0-9_]{0,47}$/
 const FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,47}$/
 const COLLECTION_KEYS = ['name', 'scope', 'read', 'write', 'maxRows', 'indexes']
+const REFERENCE_KEYS = ['name', 'from', 'access', 'as']
+
+const isReference = (value: Record<string, unknown>): boolean => 'from' in value
 const INDEX_KEYS = ['field', 'type']
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -130,10 +150,15 @@ export function collectionProblems(collections: unknown): string[] {
     problems.push(`collections has more than ${MAX_COLLECTIONS} entries`)
   }
   const names = new Set<string>()
+  const referenced = new Set<string>()
   collections.forEach((collection: unknown, i) => {
     const at = `collections[${i}]`
     if (!isObject(collection)) {
       problems.push(`${at} must be an object`)
+      return
+    }
+    if (isReference(collection)) {
+      problems.push(...referenceProblems(collection, at, names, referenced))
       return
     }
     for (const key of unknownKeys(collection, COLLECTION_KEYS)) {
@@ -164,6 +189,39 @@ export function collectionProblems(collections: unknown): string[] {
   return problems
 }
 
+function referenceProblems(
+  reference: Record<string, unknown>,
+  at: string,
+  names: Set<string>,
+  referenced: Set<string>,
+): string[] {
+  const problems: string[] = []
+  for (const key of unknownKeys(reference, REFERENCE_KEYS)) {
+    problems.push(`${at}.${key} is not a known field of a reference`)
+  }
+  if (reference.from !== 'account') problems.push(`${at}.from must be "account"`)
+  if (reference.access !== 'read' && reference.access !== 'write') {
+    problems.push(`${at}.access must be "read" or "write"`)
+  }
+  const { name } = reference
+  if (typeof name !== 'string' || !NAME_PATTERN.test(name)) {
+    problems.push(
+      `${at}.name must be lower case letters, digits and underscores, starting with a letter (at most 48)`,
+    )
+    return problems
+  }
+  if (referenced.has(name)) problems.push(`${at}.name "${name}" is referenced twice`)
+  referenced.add(name)
+  if (reference.as !== undefined && (typeof reference.as !== 'string' || !NAME_PATTERN.test(reference.as))) {
+    problems.push(`${at}.as must be lower case letters, digits and underscores, starting with a letter`)
+    return problems
+  }
+  const local = (reference.as as string | undefined) ?? name
+  if (names.has(local)) problems.push(`${at} uses the name "${local}" twice`)
+  names.add(local)
+  return problems
+}
+
 /**
  * What a shared collection may say per data access: `signed_in` needs an
  * identity, which only portal apps have, and `team` a member, which only a
@@ -191,7 +249,8 @@ export function collectionPlacementProblem(config: {
   if (dataAccess === undefined) return null
   const rules = SHARED_RULES[dataAccess]
   for (const collection of config.collections as unknown[]) {
-    if (!isObject(collection)) continue
+    // A reference's rules live on the account collection: the platform checks it.
+    if (!isObject(collection) || isReference(collection)) continue
     const name = String(collection.name)
     if ((collection.scope ?? 'customer') === 'customer') {
       if (dataAccess !== 'customer') {

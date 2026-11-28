@@ -98,54 +98,77 @@
       "maxItems": 16,
       "description": "Records the app keeps: per signed-in customer in a customer collection (me.records(name) in the SDK), or the app's own in a shared one (records(name)).",
       "items": {
-        "type": "object",
-        "required": ["name", "read", "write"],
-        "additionalProperties": false,
-        "properties": {
-          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$" },
-          "scope": {
-            "enum": ["customer", "shared"],
-            "default": "customer",
-            "description": "customer: one set of records per signed-in customer. shared: records that belong to the app; never put personal data in one."
-          },
-          "read": {
-            "enum": ["own", "public", "signed_in"],
-            "description": "own on a customer collection; public or signed_in on a shared one."
-          },
-          "write": {
-            "oneOf": [
-              { "const": "own" },
-              {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["name", "read", "write"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$" },
+              "scope": {
+                "enum": ["customer", "shared"],
+                "default": "customer",
+                "description": "customer: one set of records per signed-in customer. shared: records that belong to the app; never put personal data in one."
+              },
+              "read": {
+                "enum": ["own", "public", "signed_in"],
+                "description": "own on a customer collection; public or signed_in on a shared one."
+              },
+              "write": {
+                "oneOf": [
+                  { "const": "own" },
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "uniqueItems": true,
+                    "items": { "enum": ["feed", "team", "server"] }
+                  }
+                ],
+                "description": "own on a customer collection; on a shared one the writers: feed (an automation feed), team (members of a team app), server (the app key without a signed-in person)."
+              },
+              "maxRows": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000,
+                "default": 1000,
+                "description": "Records one customer may hold in a customer collection, or the whole shared collection."
+              },
+              "indexes": {
                 "type": "array",
-                "minItems": 1,
-                "maxItems": 3,
-                "uniqueItems": true,
-                "items": { "enum": ["feed", "team", "server"] }
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "required": ["field", "type"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,47}$" },
+                    "type": { "enum": ["string", "number", "date", "boolean"] }
+                  }
+                }
               }
-            ],
-            "description": "own on a customer collection; on a shared one the writers: feed (an automation feed), team (members of a team app), server (the app key without a signed-in person)."
+            }
           },
-          "maxRows": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 10000,
-            "default": 1000,
-            "description": "Records one customer may hold in a customer collection, or the whole shared collection."
-          },
-          "indexes": {
-            "type": "array",
-            "maxItems": 4,
-            "items": {
-              "type": "object",
-              "required": ["field", "type"],
-              "additionalProperties": false,
-              "properties": {
-                "field": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,47}$" },
-                "type": { "enum": ["string", "number", "date", "boolean"] }
+          {
+            "type": "object",
+            "required": ["name", "from", "access"],
+            "additionalProperties": false,
+            "description": "A collection the account defines in the dashboard (Veriler), shared by every app and automation.",
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$" },
+              "from": { "const": "account" },
+              "access": {
+                "enum": ["read", "write"],
+                "description": "write needs a writer the app can be and a person's approval."
+              },
+              "as": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "description": "The name the app code uses; defaults to name."
               }
             }
           }
-        }
+        ]
       }
     }
   }
