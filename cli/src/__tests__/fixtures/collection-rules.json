@@ -167,6 +167,113 @@
         }
       ],
       "ok": false
+    },
+    {
+      "case": "account collection reference",
+      "input": [
+        {
+          "name": "rates",
+          "from": "account",
+          "access": "read"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "account write reference under another name",
+      "input": [
+        {
+          "name": "menu",
+          "from": "account",
+          "access": "write",
+          "as": "todays_menu"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "reference next to its own collection",
+      "input": [
+        {
+          "name": "entries",
+          "read": "own",
+          "write": "own"
+        },
+        {
+          "name": "rates",
+          "from": "account",
+          "access": "read"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "case": "reference clashing with a declaration",
+      "input": [
+        {
+          "name": "rates",
+          "read": "public",
+          "scope": "shared",
+          "write": ["feed"]
+        },
+        {
+          "name": "rates",
+          "from": "account",
+          "access": "read"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "same account collection referenced twice",
+      "input": [
+        {
+          "name": "rates",
+          "from": "account",
+          "access": "read"
+        },
+        {
+          "name": "rates",
+          "from": "account",
+          "access": "read",
+          "as": "kurlar"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "reference with declaration keys",
+      "input": [
+        {
+          "name": "rates",
+          "from": "account",
+          "access": "read",
+          "read": "public"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "reference from elsewhere",
+      "input": [
+        {
+          "name": "rates",
+          "from": "app",
+          "access": "read"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "case": "reference with an unknown access",
+      "input": [
+        {
+          "name": "rates",
+          "from": "account",
+          "access": "admin"
+        }
+      ],
+      "ok": false
     }
   ],
   "dataAccess": [

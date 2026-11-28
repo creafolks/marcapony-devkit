@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { CollectionDeclaration } from './collections.js'
+import type { CollectionEntry } from './collections.js'
 
 /**
  * `marcapony.json` — the project's link to its Marcapony app. Written by
@@ -78,7 +78,7 @@ export interface MarcaponyConfig {
    * Omitted leaves the stored collections alone; an empty list removes them
    * (their records are kept for 30 days).
    */
-  collections?: CollectionDeclaration[]
+  collections?: CollectionEntry[]
 }
 
 export const CONFIG_FILE = 'marcapony.json'

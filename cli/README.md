@@ -428,6 +428,33 @@ customer. Declare the collections, deploy, and use them through
   goes offline at once and is kept for 30 days, and declaring it again brings
   it back. Leaving `collections` out changes nothing.
 
+#### Account collections
+
+Data that belongs to the business rather than to one app (exchange rates, a
+menu, a price list) is better kept in an account collection: you define it once
+in the dashboard's Veriler page, automations fill it, and any app binds it by
+name instead of declaring it:
+
+```json
+{
+  "collections": [
+    { "name": "rates", "from": "account", "access": "read" },
+    { "name": "menu", "from": "account", "access": "write", "as": "todays_menu" }
+  ]
+}
+```
+
+- `access`: `read`, or `write` when the app is one of the collection's writers
+  (`team` on a team app, `server` on an app with its own server). The first
+  deploy with a write binding needs a person's approval on the app page.
+- `as`: the name your code uses (`mp.records('todays_menu')`); defaults to
+  `name`. Names must be unique across references and your own collections.
+- The collection's own `read` rule decides who sees it: `public`, `customers`
+  (customer apps) or `team` (team apps). A deploy is refused when the app's
+  audience cannot read it, or when the account has no collection of that name.
+- Production reads and writes the live copy; every other environment the test
+  copy. Republishing an app never changes the data.
+
 #### Shared collections
 
 A collection with `"scope": "shared"` keeps records that belong to the app,
