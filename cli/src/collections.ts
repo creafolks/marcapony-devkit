@@ -212,8 +212,13 @@ function referenceProblems(
   }
   if (referenced.has(name)) problems.push(`${at}.name "${name}" is referenced twice`)
   referenced.add(name)
-  if (reference.as !== undefined && (typeof reference.as !== 'string' || !NAME_PATTERN.test(reference.as))) {
-    problems.push(`${at}.as must be lower case letters, digits and underscores, starting with a letter`)
+  if (
+    reference.as !== undefined &&
+    (typeof reference.as !== 'string' || !NAME_PATTERN.test(reference.as))
+  ) {
+    problems.push(
+      `${at}.as must be lower case letters, digits and underscores, starting with a letter`,
+    )
     return problems
   }
   const local = (reference.as as string | undefined) ?? name
